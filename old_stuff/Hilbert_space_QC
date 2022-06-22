@@ -1,0 +1,34 @@
+
+############################################
+## Hilbert space for N-qubit quantum circuit
+############################################
+
+using ITensors
+
+
+ITensors.space(::SiteType"QuantumCircuit") = 2
+
+
+function ITensors.op!(Op::ITensor, ::OpName"PauliX",
+    ::SiteType"QuantumCircuit", s::Index)
+
+    Op[s'=>1, s=>2] = 1.
+    Op[s'=>2, s=>1] = 1.
+
+end
+
+
+function ITensors.op!(Op::ITensor, ::OpName"Proj00",
+    ::SiteType"QuantumCircuit", s::Index)
+
+    Op[s'=>1, s=>1] = 1.
+
+end
+
+
+function ITensors.op!(Op::ITensor, ::OpName"Proj11",
+    ::SiteType"QuantumCircuit", s::Index)
+
+    Op[s'=>2, s=>2] = 1.
+
+end
