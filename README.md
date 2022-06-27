@@ -15,17 +15,96 @@ The QuantumSimulator is entirely built on top of the existing `ITensors` (add li
 
 ## Usage and Examples
 
-Below we will give an overview of the most important functions and how to use them. More details can be found in the `Example_scripts` directory. 
+Below we will give an overview of the most important functions and how to use them. More details can be found in the files in the `Example_scripts` directory. 
 
-### Example 1
+### A Minimal Working Example: The Bernstein-Vazirani Circuit
+
+To give you a first flavour of how to use the QuantumSimulator, we will implement the Bernstein-Vazirani algorithm. The purpose of this section is not to make use of the underlying MPS-backend, but simply to get an idea of how the high-level functions and different building block of this package are implemented. 
+
+We don't provide a full explanation of the Bernstein-Vazirani algorithm below, for more details see (REF). However, the basic idea is to determine a secret bitstring. This bitsring needs to be encoded into a quantum oracle, and the algorithm will be able to find the bitstring with only a single call to the oracle.
+
+First we need to import the package:
+```
+include("YOUR_PATH_TO_PACKAGE/QSim.jl")
+```
+
+Then, we need to declare the main parameters defining the quantum circuit:
+```
+N = 4
+N_meas = 1000
+backend = "ED_Julia" # or "MPS_ITensor"
+lintop = false # remnant from previous version, for now simply keep as "false"
+```
+
+Quantum circuit objects are declared as follows:
+```
+qc = initialise_qcircuit(N, lintop, backend)
+```
+
+Here, you can see already that the main parameters are the number of qubits and the backend (full state vectors *or* MPS) needed for the simulation. Now, let's build the quantum circuit:
+```
+# prepare initial superposition
+hadamard!(qc, [1, 2, 3, 4])
+PauliZ!(qc, [4])
+
+# construct/apply oracle: this specific oracle encodes the bitstring [1, 0, 1]
+cnot!(qc, [1, 4])
+cnot!(qc, [3, 4])
+
+# wrap up circuit
+hadamard!(qc, [1, 2, 3])
+```
+The above code already tells you everything about how to apply (multiple) single-site gates and singly controlled gates: for any single site gate, you can specify an abitrary list of qubit positions where the gate(s) should be applied. As for the CNOT gate (and later more general controlled gates), the placement is always described by a list of two positions, the first one being the control qubit and the second one the "action qubit".
+
+In order to recover the secret bitstring, we will of course need to measure the final state. A statistical measurement can be performed by calling:
+```
+register = [1, 2, 3]
+sample_measurement(qc, register, N_meas)
+```
+Similarly to applying single-site gates, the measurement can be done on an arbitrary sub-register of the quantum circuit by choosing the desired qubits in the `register` argument ("arbitrary register" also means non-adjacent qubits).
+
+Finally, we may draw the quantum circuit to the terminal by executing:
+```
+draw(qc)
+```
+This yields the representation
+```
+1   |0⟩ -H-------○-------H-----M
+2   |0⟩ -H-------|-------H-----M
+3   |0⟩ -H-------|---○---H-----M
+4   |0⟩ -H---Z---+---+----------
+```
+The symbols used in the circuit above are hopefully self-explanatory. Due to the finite width of the terminal, the `draw()` function automatically truncated the graphical representation if the circuit becomes too deep to fit into a single line. Therefore, this feature should be seen rather as a cross-check for developing (smaller parts of) a quantum circuit than a fully-fledged graphics output. 
+
+Another feature we would like to introduce at this stage is the possibility to implement custom sub-circuits. This will be especially useful in the context of quantum algorithms where a subroutine is applied/looped over many times throughout the circuit, e.g. for a trotterised time evolution. Here, one could declare the oracle as a stand-alone subroutine by replacing the CNOTs in the above circuit by the following commands:
+```
+#cnot!(qc, [1, 4])
+#cnot!(qc, [3, 4
+N_reg = 4
+U_BV = initialise_custom_gate(qc, N_reg, "BV")
+cnot!(U_BV, [1, 4])
+cnot!(U_BV, [3, 4])
+apply_custom_gate(qc, U_BV, 1)
+```
+The gates are applied to the subcircuit in the exact same fashion as they would be applied to the "full" circuit. Note that upon applying the subciruit, one has to specify the position to which the first qubit in the subcircuit corresponds (as the subcircuit may have less qubits than the full circuit). Correspondingly, the graphical representation of the quantum circuit now contains the custom block:
+```
+1   |0⟩ -H-------+BV++---H-----M
+2   |0⟩ -H-------|   |---H-----M
+3   |0⟩ -H-------|   |---H-----M
+4   |0⟩ -H---Z---+++++----------
+```
+In the top line of the custom gate block, the name string is included (please choose a maximum length of five characters).
+
+
+### Quantum Fourier Transform
 
 -- fill in --
 
-### Example 2
+### Quantum Phase Estimation
 
 -- fill in --
 
-### Example 3
+### Overview: Available Quantum Gates
 
 -- fill in --
 
