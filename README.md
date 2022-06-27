@@ -9,7 +9,7 @@ All the quantum gates are contained in the directory `functions`. Each gate func
 
 ## Installation
 
-The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Therefore, it apart from the latest Julia distribution it only requires the installation of `ITensors`.
+The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Note that `ITensors` currently requires at least the Julia 1.6 distribution.
 
 -- more details to come --
 
