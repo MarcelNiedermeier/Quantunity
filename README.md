@@ -9,13 +9,17 @@ All the quantum gates are contained in the directory `functions`. Each gate func
 
 ## Installation
 
-The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Note that `ITensors` currently requires at least the Julia 1.6 distribution.
+The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Note that `ITensors` currently requires at least the Julia 1.6 distribution. Currently, we haven't yet declared the QuantumSimulator as a dedicated module or Julia package (plan for the future). Thus, for the time being, after installing Julia 1.6 (or newer if available) and the latest ITensors distribution, we recommend to save the contents of this repository in a dedicated directory. It is then sufficient to import the main file as follows:
+```
+include("YOUR_PATH_TO_PACKAGE/QSim.jl")
+```
+All other functions and dependencies on other subfiles are then automatically taken care of and included as well. 
 
--- more details to come --
+-- more details to come once it has been turned into a proper package --
 
 ## Usage and Examples
 
-Below we will give an overview of the most important functions and how to use them. More details can be found in the files in the `Example_scripts` directory. 
+Below we will give an overview of the most important functions and how to use them by introducing several concrete examples. More details and full scripts can be found in the files in the `Example_scripts` directory. 
 
 ### A Minimal Working Example: The Bernstein-Vazirani Circuit
 
