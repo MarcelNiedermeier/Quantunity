@@ -219,7 +219,10 @@ Let's see how we can obtain a simple quantum phase estimation (QPE) algorithm fo
 
 The easiest way to implement a QPE involves using a unitary operator which is diagonal in the computational basis, as this allows to easily take powers of the operator. For instance, a suitable operator could be given as U = \[e^(i 2π θ1) 0; 0 e^(i 2π θ2)]. We will leave it as a task for you to write a simple function which returns the n-th power of that operator, such as 
 ```
-U_n(θ1, θ2, n).
+function U_n(θ1, θ2, n)
+    ...
+    ...
+end
 ```
 Next, let us build the circuit. With total number of qubits defined as `N = 1 + n_prec + n_prob`, we can set up our circuit as 
 ```
