@@ -1,6 +1,6 @@
 # QuantumSimulator
 
-This package is a general-purpose, high-level quantum circuit simulator. It combines both an exact state vector and a matrix product state (MPS)-based approach (add REF for MPS). The MPS functionalities are built on top of the existing Julia package `ITensors` (REF ITensors). The user can construct any quantum circuit consisting of the usual quantum gates, with the possibility to define custom gates acting on up to eight qubits. By adjusting the maximum bond dimension if MPS are chosen as a backend, the user can place an upper bound on the possible entanglement in the quantum circuit and study different quantum algorithms as a function of the size of the accessible Hilbert space. It has been shown that this approach is comparable to running quantum circuits on NISQ quantum computing devices (REF to PRX paper); thus MPS-based quantum computation gives a means to analyse to computational power of currently available quantum computers.
+This package is a general-purpose, high-level quantum circuit simulator. It combines both an exact state vector and a matrix product state (MPS)-based approach (add REF for MPS). The MPS functionalities are built on top of the existing Julia package `ITensors` (REF ITensors), providing the necessary high-level functions to deal with MPS and MPOs (matrix product *operators*). The user can construct any quantum circuit consisting of the usual quantum gates, with the possibility to define custom gates acting on up to eight qubits. By adjusting the maximum bond dimension (if MPS are chosen as a backend), the user can place an upper bound on the possible entanglement in the quantum circuit and study different quantum algorithms as a function of the size of the accessible Hilbert space. It has been shown that this approach is comparable to running quantum circuits on NISQ quantum computing devices (REF to PRX paper); thus MPS-based quantum computation gives a means to analyse to computational power of currently available quantum computers.
 
 ## Overview 
 
@@ -9,7 +9,7 @@ All the quantum gates are contained in the directory `functions`. Each gate func
 
 ## Installation
 
-The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Note that `ITensors` currently requires at least the Julia 1.6 distribution. Currently, we haven't yet declared the QuantumSimulator as a dedicated module or Julia package (plan for the future). Thus, for the time being, after installing Julia 1.6 (or newer if available) and the latest ITensors distribution, we recommend to save the contents of this repository in a dedicated directory. It is then sufficient to import the main file as follows:
+The QuantumSimulator is entirely built on top of the existing `ITensors` (add link) Julia package. Note that `ITensors` currently requires at least the Julia 1.6 distribution. Currently, we haven't yet declared the QuantumSimulator as a dedicated module or Julia package (plan for the future). Thus, for the time being, after installing Julia 1.6 (or newer if available) and the latest `ITensors` distribution, we recommend to save the contents of this repository in a dedicated directory. When setting up a script to implement a quantum circuit, it is sufficient to import the main file as follows:
 ```
 include("YOUR_PATH_TO_PACKAGE/QSim.jl")
 ```
@@ -213,10 +213,52 @@ The positional arguments should be read as follows: we create an (inverse) QFT r
 
 
 
-
 ### Quantum Phase Estimation
 
--- fill in --
+Let's see how we can obtain a simple quantum phase estimation (QPE) algorithm for a given single-site gate. The purpose of the QPE is to find the eigenvalues of a unitary operator. These are by construction located on the unit circle, hence fully described by a phase θ. By varying the number of qubits in the QPE, one can obtain any desired binary approximation to the true phase, with varying (mostly relatively high) success probabilities. One caveat of the QPE is that the input state needs to be constructed with the eigenvector whose phase one is trying to determine. For this reason, the QPE is rather used a a subroutine (where the input state is already the result of some pre-processing) than a stand-alone algorithm.
+
+The easiest way to implement a QPE involves using a unitary operator which is diagonal in the computational basis, as this allows to easily take powers of the operator. For instance, a suitable operator could be given as U = \[e^(i 2π θ1) 0; 0 e^(i 2π θ2)]. We will leave it as a task for you to write a simple function which returns the n-th power of that operator, such as 
+```
+U_n(θ1, θ2, n).
+```
+Next, let us build the circuit. With total number of qubits defined as `N = 1 + n_prec + n_prob`, we can set up our circuit as 
+```
+qc = initialise_qcircuit(N, lintop, "MPS_ITensor", maxdim, contmethod, random, randombond)
+```
+(please choose the parameters in a suitable way, as you have learned previously :) ). In the definition of the qubit count, the "1" represents the qubit whiere we apply the unitary operator whose phase should be estimated, and "n_prec" and "n_prob" can be varied to achieve different *precisions* and *success probabilities*. 
+
+Next, we have to build the initial state. The upper registers are set up in an equal superposition, whereas the "target qubit" is put into an eigenstate of U (which here, by construction, can be taken to be |0>):
+```
+hadamard!(qc, [i for i in 1:(N-1)])
+```
+Alternatively, one can also set the final qubit into a superposition of the eigenstates (or a set of eigenstates spanning a subspace of interest for bigger operators). In that case, this could be achieved by applying yet another Hadamard gate to the final line, however in general this might involve a more complicated transformation. Try it and see how it influences the results!
+
+After the initialisation, we have to build the controlled rotations and apply an inverse QFT:
+```
+# do controlled rotations
+n = 1
+for i in (N-1):-1:1
+    CU!(qc, U_n(θ1, θ2, n), [i, N])
+    n = 2*n
+end
+
+# do inverse QFT
+invQFT!(qc, 1, N-1)
+```
+Here, we are profiting from the fact that the inverse QFT has already been implemented as a ready-made subroutine. Finally, we sample a number of meausrements on the register from the first qubit to the n_prec'th qubit. ANother in-built function allows you to read out the meausurement results and convert them into data that can be plotted in a bar plot (i.e. which gives you the measurement histogram):
+```
+sample_measurement(qc, [i for i in 1:(n_prec)], N_meas, eps, true, "ITensor", true)
+states, probs = get_measurement_histogram(qc, n_prec)
+```
+Now you can convince yourself that you indeed recover the correct phase with high probabilty!
+
+For more general applications, the phase estimation has currently been implemented as a subroutine for operators U up to eight qubits. If that operator is defined as a matrix, the QPE can be performed by calling
+```
+QPE!(qc, U, 1, N_qubits)
+```
+Similarly to before, one needs to specify the start and the width of the subroutine.
+
+
 
 ### Overview: Available Quantum Gates
 
@@ -249,7 +291,7 @@ UGate!(qc, [...], α, β, γ, δ)
 # two-site gates
 cnot!(qc, [...])
 fullSwap!(qc, [...])
-#
+CU!(qc, U, [...]) # controlled arbitrary unitary operator
 #
 
 # three-site gates
@@ -257,13 +299,19 @@ fullSwap!(qc, [...])
 #
 ```
 
-## Disclaimer
+## Disclaimer and Development
 
 This Julia package is still under development as a part of the author's doctoral research in the groups for *Correlated Quantum Materials* and *Quantum Transport* at Aalto University in Espoo, Finland. If you discover any bugs, inconsitencies or other issues while using it, or if you have suggestions for features which should be implemented but aren't, please contact me at `marcel.niedermeier[at]aalto.fi`. I would be very glad for any feedback!
 
+### Future Development
+
+One idea for future extensions of this package would be to upgrade the exact state vector simulator, such that it would be able to simulate the decoherence of qubits and quantum errors. In addition, one could add a "topology matrix" for each quantum circuit, which would enable us to simulate a given quantum processor. With those feautures, a direct comparison with MPS simulations would be possible and help us assess how closely MPS quantum simulations actually model near-term quantum computation. 
+
+Furthermore, we are trying to increase the number of pre-built algorithms and submodules, such that configuring and developing new quantum algorithms building on these becomes a more straightforward task.
+
 ## License, Citation
 
--- yet to come --
+-- yet to come, when declared as a package and a manual has been written --
 
 ## References
 
