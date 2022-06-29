@@ -293,6 +293,7 @@ Similarly to before, one needs to specify the start and the width of the subrout
 
 ### Random Quantum Circuits
 
+-- write Tutorial script on random quantum Circuit generation and convergence to Porter-Thomas --
 
 
 ## Functionalities of QuantumSimulator
