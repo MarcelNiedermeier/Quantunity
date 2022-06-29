@@ -217,20 +217,23 @@ The positional arguments should be read as follows: we create an (inverse) QFT r
 
 Let's see how we can obtain a simple quantum phase estimation (QPE) algorithm for a given single-site gate. The purpose of the QPE is to find the eigenvalues of a unitary operator. These are by construction located on the unit circle, hence fully described by a phase θ. By varying the number of qubits in the QPE, one can obtain any desired binary approximation to the true phase, with varying (mostly relatively high) success probabilities. One caveat of the QPE is that the input state needs to be constructed with the eigenvector whose phase one is trying to determine. For this reason, the QPE is rather used a a subroutine (where the input state is already the result of some pre-processing) than a stand-alone algorithm.
 
-The easiest way to implement a QPE involves using a unitary operator which is diagonal in the computational basis, as this allows to easily take powers of the operator. For instance, a suitable operator could be given as U = \[e^(i 2π θ1) 0; 0 e^(i 2π θ2)]. We will leave it as a task for you to write a simple function which returns the n-th power of that operator, such as 
+The easiest way to implement a QPE involves using a unitary operator which is diagonal in a basis that we can straightforwardly implement. For instance, a suitable operator could be given as U = H \[e^(i 2π θ1) 0; 0 e^(i 2π θ2)] H. This has by construction the eigenvalues e^(i 2π θ1) and e^(i 2π θ2) and is diagonal in the Hadamard basis. A simple function to calculate the nth power of this operator could be given by
 ```
 function U_n(θ1, θ2, n)
-    ...
-    ...
+    H = 1/√2 * Complex.([1. 1.; 1. -1.])
+    U_tmp = Complex.([exp(1.0im*2π*n*θ1) 0.; 0. exp(1.0im*2π*n*θ2)])
+    return H*U_tmp*H
 end
 ```
+Of course, we have to define some values for θ1 and θ2. To make it more interesting, choose irrational values (between 0 and 1).
+
 Next, let us build the circuit. With total number of qubits defined as `N = 1 + n_prec + n_prob`, we can set up our circuit as 
 ```
 qc = initialise_qcircuit(N, lintop, "MPS_ITensor", maxdim, contmethod, random, randombond)
 ```
 (please choose the parameters in a suitable way, as you have learned previously :) ). In the definition of the qubit count, the "1" represents the qubit whiere we apply the unitary operator whose phase should be estimated, and "n_prec" and "n_prob" can be varied to achieve different *precisions* and *success probabilities*. 
 
-Next, we have to build the initial state. The upper registers are set up in an equal superposition, whereas the "target qubit" is put into an eigenstate of U (which here, by construction, can be taken to be |0>):
+Next, we have to build the initial state. The upper registers are set up in an equal superposition, whereas the "target qubit" is put into an eigenstate of U. We can either take it to be |+>, |->, or an equal superposition of the two (which is equivalent to leaving it in the |0> state):
 ```
 hadamard!(qc, [i for i in 1:(N-1)])
 ```
@@ -248,12 +251,37 @@ end
 # do inverse QFT
 invQFT!(qc, 1, N-1)
 ```
-Here, we are profiting from the fact that the inverse QFT has already been implemented as a ready-made subroutine. Finally, we sample a number of meausrements on the register from the first qubit to the n_prec'th qubit. ANother in-built function allows you to read out the meausurement results and convert them into data that can be plotted in a bar plot (i.e. which gives you the measurement histogram):
+Here, we are profiting from the fact that the inverse QFT has already been implemented as a ready-made subroutine. Finally, we sample a number of meausrements on the register from the first qubit to the n_prec'th qubit:
 ```
 sample_measurement(qc, [i for i in 1:(n_prec)], N_meas, eps, true, "ITensor", true)
-states, probs = get_measurement_histogram(qc, n_prec)
 ```
-Now you can convince yourself that you indeed recover the correct phase with high probabilty!
+Drawing the quantum circuit, we now obtain:
+```
+1   |0⟩ -H-----------------------------------------------○---invQFT----M  11
+2   |0⟩ -H-------------------------------------------○---|---|   |-----M  8
+3   |0⟩ -H---------------------------------------○---|---|---|   |-----M  11
+4   |0⟩ -H-----------------------------------○---|---|---|---|   |-----M  12
+5   |0⟩ -H-------------------------------○---|---|---|---|---|   |-----M  12
+6   |0⟩ -H---------------------------○---|---|---|---|---|---|   |-----M  12
+7   |0⟩ -H-----------------------○---|---|---|---|---|---|---|   |-----M  12
+8   |0⟩ -H-------------------○---|---|---|---|---|---|---|---|   |-----M  12
+9   |0⟩ -H---------------○---|---|---|---|---|---|---|---|---|   |------  12
+10  |0⟩ -H-----------○---|---|---|---|---|---|---|---|---|---|   |------  8
+11  |0⟩ -H-------○---|---|---|---|---|---|---|---|---|---|---|   |------  4
+12  |0⟩ -H---○---|---|---|---|---|---|---|---|---|---|---|---+++++------  2
+13  |0⟩ -----U---U---U---U---U---U---U---U---U---U---U---U--------------
+```
+
+
+Now you can convince yourself that you indeed recover the correct phase(s) with high probability! For this, we have to find the measurement results with the highest probabilities, and convert their binary representation back into a decimal representation:
+```
+meas_max, probs_max = get_highest_prob_measurement(qc_MPS, 2)
+phases = []
+for state in meas_max
+    push!(phases, recover_phase_estimate(state))
+end
+```
+If you now print the elements of the array `phases` and compare them to θ1 and θ2, you should find a pretty good approximation. You can improve this by choosing a higher value for n_prec (can you peak/scatter the probability distribution by increasing/decreasing n_prob).
 
 For more general applications, the phase estimation has currently been implemented as a subroutine for operators U up to eight qubits. If that operator is defined as a matrix, the QPE can be performed by calling
 ```
