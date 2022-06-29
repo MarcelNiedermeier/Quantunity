@@ -291,9 +291,15 @@ Similarly to before, one needs to specify the start and the width of the subrout
 
 
 
-### Overview: Available Quantum Gates
+### Random Quantum Circuits
 
-For completeness, below we list all gates which are currently implemented with dedicated function calls. The names and definitions follow the usual conventions for quantum gates.
+
+
+## Functionalities of QuantumSimulator
+
+### Available Quantum Gates
+
+Below we list all gates which are currently implemented with dedicated function calls. The names and definitions follow the usual conventions for quantum gates.
 ```
 # Basic single-site gates
 hadamard!(qc, [...])
@@ -326,9 +332,44 @@ CU!(qc, U, [...]) # controlled arbitrary unitary operator
 #
 
 # three-site gates
-#
+# toffoli!(qc, [...) # first two positions in array control qubits
 #
 ```
+
+### Subroutines
+
+Several important building blocks of quantum circuits are pre-configured as subroutines can be loaded with a single function call. 
+
+Creating Bell states between any two qubits in positions pos\[1], pos\[2]: 
+```
+BellState!(qc, num, pos)
+```
+where `num` defines the Bell states as
+```
+1 -> |00⟩ + |11⟩
+2 -> |00⟩ - |11⟩
+3 -> |01⟩ + |10⟩
+4 -> |01⟩ - |10⟩
+```
+
+Random Circuit blocks over a certain width `num` and depth `D`:
+```
+randomCircuit!(qc, pos, num, D)
+```
+
+Quantum Fourier transform and its inverse:
+```
+QFT!(qc, pos, num)
+invQFT!(qc, pos, num)
+```
+
+Quantum phase estimation of operator U and inverse QPE:
+```
+QPE!(qc, U, pos, num_bin_digits)
+invQPE!(qc, U, pos, num_bin_digits)
+```
+
+
 
 ## Disclaimer and Development
 
