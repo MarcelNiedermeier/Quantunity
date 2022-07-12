@@ -113,7 +113,7 @@ backend = "MPS_ITensor"
 maxdim = 10
 qc = initialise_qcircuit(N, lintop, backend, maxdim)
 ```
-Apart from that, we build our quantum circuit as we have done previously. To make our lives a bit easier, however, let's write a function which builds the oracle automatically:
+The choice of a maximum bond dimension of 10 here is arbitrary (but, as you will see, sufficient). In general, there is no recipe which allows you to choose the correct bond dimension for every situation. Indeed, often it is the whole point of a given study to assess a certain behaviour *as a function* of the bond dimension in order to study the entangling properties of a quantum circuit. Apart from that, we build our circuit as we have done previously. To make our lives a bit easier, however, let's write a function which builds the oracle automatically:
 ```
 function BV_oracle!(qc, bitstring)
     N = qc.NumQubits
