@@ -216,6 +216,80 @@ add corresponding keyword
 The same can be done if the simulation backend are conventional vectors - however there the exponential wall is of course a result of the approach and not a consequence of how the measurement results are saved!
 
 
+
+### Random Quantum Circuits
+
+Random quantum circuits are primarily a benchmark tool for quantum computations and quantum simulations. Intuitively, they create very entangled state very quickly, a task which is both hard for NISQ quantum devices (due to their non-perfect gate fidelities) and quantum simulators (since capturing high entanglement requires a large memory overhead). Outperforming a random quantum circuit simulation with an experimental device has been used as a test for quantum supremacy in the past. 
+
+Constructing a random quantum state is non-trivial. In essence, one has to sample a random unitary operator which is applied to the initial state to create the random state. A random quantum circuit is a circuit built from elementary quantum gates and which converges to a random unitary operator after a sufficient number of gate layers. It needs to consist of both single- and multi-qubit gates, as single qubit gates cannot produce entanglement on their own. Without entering into the details, one way of constructing such a circuit is to alternate layers of random single qubit unitaries and CNOT gates, the latter applied between neighboring lines. 
+
+Let's start with a function to implement the random unitaries: for this, we have already implemented a function
+```
+random_single_site_gates!(qc, pos)
+```
+which constructs a randomly sampled unitary on each site specified in `pos`, according to
+```
+    U_11 = exp(1.0im*(α-β/2-δ/2))*cos(γ/2)
+    U_12 = -exp(1.0im*(α-β/2+δ/2))*sin(γ/2)
+    U_21 = exp(1.0im*(α+β/2-δ/2))*sin(γ/2)
+    U_22 = exp(1.0im*(α+β/2+δ/2))*cos(γ/2)
+
+```
+where the four parameters are drawn from the interval \[0, 2π] for each position. Next, we need the layers of CNOT gates. This can for instance be achieved by constructing a simple function
+```
+function cnot_layer!(qc, start_pos)
+    for i in start_pos:2:(N-1)
+        cnot!(qc, [i, i+1])
+    end
+end
+```
+Constructing the random circuit becomes then as simple as alternating those two functions:
+```
+for j in 1:D
+
+    # apply random unitaries to each site
+    random_single_site_gates!(qc, [i for i in 1:N])
+
+    # apply vertically stacked CNOT gates
+    if isodd(j)
+        cnot_layer!(qc, 1)
+    else
+        cnot_layer!(qc, 2)
+    end
+end
+```
+where D is the depth you want to reach. Doing this on a small circuit for a few layers yields
+```
+1   |0⟩ -U---○---------------U---------------U---○---------------U---------------U---○---------------U--------------  15
+2   |0⟩ -U---+---------------U---○-----------U---+---------------U---○-----------U---+---------------U---○----------  12
+3   |0⟩ -U-------○-----------U---+-----------U-------○-----------U---+-----------U-------○-----------U---+----------  16
+4   |0⟩ -U-------+-----------U-------○-------U-------+-----------U-------○-------U-------+-----------U-------○------  10
+5   |0⟩ -U-----------○-------U-------+-------U-----------○-------U-------+-------U-----------○-------U-------+------  8
+6   |0⟩ -U-----------+-------U-----------○---U-----------+-------U-----------○---U-----------+-------U-----------○--  4
+7   |0⟩ -U---------------○---U-----------+---U---------------○---U-----------+---U---------------○---U-----------+--  2
+8   |0⟩ -U---------------+---U---------------U---------------+---U---------------U---------------+---U--------------
+Chi:   1   1   7   16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  16  14  16 
+```
+which is now an approximation to a truly random quantum state (in the restricted subset of the full Hilbert space). Try playing around with the circuit depth, the number of qubits and the maximum allowed bond dimension. One could now compute the probability to measure a certain bitstring at the end of the circuit and compare the cumulative distribution to the Porter-Thomas distribution - this would allow you to assess how good the approximation of a random unitary operator by the random quantum circuit is.
+
+For future applications of random quantum circuits, we have packaged the above commands into subroutine:
+```
+randomCircuit!(qc, pos, num, D, compact_rep=true)
+```
+Here, `pos` is the starting position of the random quantum circuit and `num` the number of qubits involved (you might want to perform a transformatino to a random state only on a subregister of qubits). For convenience, the random circuit is then be default represented compactly:
+```
+1   |0⟩ -RANDOM-  32
+2   |0⟩ -|   |--  32
+3   |0⟩ -|   |--  24
+4   |0⟩ -|   |--  12
+5   |0⟩ -|   |--  6
+6   |0⟩ -|   |--  3
+7   |0⟩ -|   |--  2
+8   |0⟩ -+++++--
+```
+The same will be true for other subroutines later on.
+
+
 ### Quantum Fourier Transform
 
 Here, we will show how one can implement a quantum Fourier transform, which an important building block of many more advanced quantum algorithms. To check the accuracy of our results, we will compare it to an exact evaluation of the Fourier coefficients. Let's start again by importing the simulator and setting the initial parameters:
@@ -404,10 +478,10 @@ QPE!(qc, U, 1, N_qubits)
 Similarly to before, one needs to specify the start and the width of the subroutine.
 
 
+### Quantum Simulation
 
-### Random Quantum Circuits
+--- Time evolution of a quantum state ---
 
--- write Tutorial script on random quantum Circuit generation and convergence to Porter-Thomas --
 
 
 ## Functionalities of QuantumSimulator
