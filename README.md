@@ -184,29 +184,28 @@ qc.MeasurementResult
 ```
 In principle, you could read this data out and then save it alongside other relavant data in the script in your preferred data format. To make your task slightly easier, we have already implemented a `save_data()` function. It uses the `JLD2` package and sets up a dictionary in which relevant data will be saved. You can choose between different styles of how much data you want to save by default (e.g. if you want to save measurement results or not), and you can indicate any other array of parameters of results obtained in the calculation that you would like to save as well. For instance, the lines
 ```
-other_data = [bond_dims, fidelities]
+other_data = [:bond_dims, :fidelities]
 style = "no_measurement"
-save_data(qc, "PATH_TO_YOUR_DATA", other_data, style)
+save_data(qc, "PATH_TO_YOUR_DATA", other_data, style=style)
 ```
 would save some defining data about the quantum circuit, alongside the arrays `bond_dims` and `fidelities` (assumed to be parameters and something you have computed). What is happening under the hood is that first, the data about the quantum circuit is saved in the dictionary `d`:
 ```
 d = Dict(
             "N" => qc.NumQubits,
-            "N_meas" => qc.NumMeasurements,
             "backend" => "ED_Julia"
             )
 ```
 After that, new entries in the dictionary for `bond_dims` and `fidelities` are created, where the keys are automatically the Strings of the array names:
 ```
 for data in other_data
-        d[String(:data)] = data
+        d[String(data)] = eval(data)
     end
 ```
-Hopefully, this will provide you with an easy and fast means of saving your data generated in one script and importing it in a different, e.g. post-processing or plotting script. For that, it is sufficient to simply load the data as
+It is crucial that the entries in the `other_data` array are given as `Symbols`, only then will the loop be able to create the corresponding key-value pair for the dictionary from a single argument. Hopefully, this will provide you with an easy and fast means of saving your data generated in one script and importing it in a different, e.g. post-processing or plotting script. For that, it is sufficient to simply load the data as
 ```
-data = load("PATH_TO_YOUR_DATA")
+data = load_data("PATH_TO_YOUR_DATA")
 ```
-Afterwards, you can access everything you have saved by simply calling the keys of the dictionary.
+Afterwards, you can access everything all the data you have saved by simply calling the keys of the dictionary.
 
 
 A final comment here: the algorithm as presented here will fail if the number of qubits becomes too large (say, 30). Why - shouldn't MPS give us a parametrisation linear in the system size and allow us to go much beyond that?? Yes, and the MPS aren't the issue - the measurement is! In order to obtain the full measurement histogram, we record the number of times *every* different bitstring has been measured - and the number of different bitstrings is of course still exponential in the size of the register that is measured. What does this imply for us in practice? First, if you want to work with a full measurement histogram, you should check how big the register you are measuring is, and if you really need all of that (since often, quantum algorithms are anyway constructed in a way as to peak all the information into very few amplitudes. E.g. here, we obtain just a single amplitude but with probability one!). Since the in-built measurment histogram is just a convenience feature, we would therefore recommend to *deactivate* it if all it does is creating a large (and probably unnecessary) overhead in memory:
