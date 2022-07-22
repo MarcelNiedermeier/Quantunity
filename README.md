@@ -40,13 +40,12 @@ Then, we need to declare the main parameters defining the quantum circuit:
 N = 4
 N_meas = 1000
 backend = "ED_Julia" # or "MPS_ITensor"
-lintop = false # remnant from previous version, for now simply keep as "false"
 ```
 The `backend` parameter determines whether the computation is done on exact state vectors or MPS. After that, the code is *exactly* the same for both cases. Neat!
 
 Quantum circuit objects are declared as follows:
 ```
-qc = initialise_qcircuit(N, lintop, backend)
+qc = initialise_qcircuit(N, backend)
 ```
 
 Here, you can see already that the main parameters are the number of qubits and the backend (full state vectors *or* MPS) needed for the simulation. Now, let's build the quantum circuit:
@@ -113,8 +112,8 @@ end
 Next, we initialise a new quantum circuit, this time however using MPS as a computational backend:
 ```
 backend = "MPS_ITensor"
-maxdim = 10
-qc = initialise_qcircuit(N, lintop, backend, maxdim)
+maxbond = 10
+qc = initialise_qcircuit(N, backend, maxdim=maxbond)
 ```
 The choice of a maximum bond dimension of 10 here is arbitrary (but, as you will see, sufficient). In general, there is no recipe which allows you to choose the correct bond dimension for every situation. Indeed, often it is the whole point of a given study to assess a certain behaviour *as a function* of the bond dimension in order to study the entangling properties of a quantum circuit. Apart from that, we build our circuit as we have done previously. To make our lives a bit easier, however, let's write a function which builds the oracle automatically:
 ```
@@ -295,19 +294,15 @@ Here, we will show how one can implement a quantum Fourier transform, which an i
 ```
 include("YOUR_PATH_TO_PACKAGE/QSim.jl")
 N = 5
-maxdim = 30 # maximum allowed bond dimension
+maxbond = 30 # maximum allowed bond dimension
 N_meas = 100
 backend = "MPS_ITensor" 
-lintop = false
-contmethod = "naive" # also no need to worry about
-random = true # now, let's use a random initial state!
-randombond = 3 # bond dimension of random state
+rbond = 3 # bond dimension of random state
 ```
 
 Then, we can initialise the quantum circuit with a random initial state and copy the wave functions for later comparisons:
 ```
-qc = initialise_qcircuit(N, lintop, backend, maxdim,
-contmethod, random, randombond)
+qc = initialise_qcircuit(N, backend, maxdim=maxbond, random=true, randombond=rbond)
 
 # the state is encoded as the "StateVector" subtype in the qc object
 # use deepcopy to make sure to hold a true copy of the state,
@@ -416,7 +411,7 @@ Of course, we have to define some values for θ1 and θ2. To make it more intere
 
 Next, let us build the circuit. With total number of qubits defined as `N = 1 + n_prec + n_prob`, we can set up our circuit as 
 ```
-qc = initialise_qcircuit(N, lintop, "MPS_ITensor", maxdim, contmethod, random, randombond)
+qc = initialise_qcircuit(N, "MPS_ITensor", maxdim=maxbond)
 ```
 (please choose the parameters in a suitable way, as you have learned previously :) ). In the definition of the qubit count, the "1" represents the qubit whiere we apply the unitary operator whose phase should be estimated, and "n_prec" and "n_prob" can be varied to achieve different *precisions* and *success probabilities*. 
 
@@ -479,8 +474,6 @@ Similarly to before, one needs to specify the start and the width of the subrout
 
 
 ### Grover Search
-
---- show implementation of Grover oracle and Grover diffusor to find one and multiple marked elements ---
 
 We can also implement a simple instance of Grover's search algorithm with relatively simple means. For this we need to construct two objects: the phase oracle, which flips the sign of the marked computational basis state (or of multiple marked states in the general case) and the Grover diffusor, defined as H(2|0><0| - I)H. Without going into more details, the simplest way to construct those gates could be achieved as follows: for the phase oracle, we apply an X gate to every qubit line representing a 0 in the marked element. Then we apply a controlled Z gate depending on all of the other qubits on the bottom qubit, as finally undo the X gates from the first step. By construction, this operator will invert the sign of the marked element and act as as indentity on the others. All this is done by the function
 ```
@@ -587,7 +580,14 @@ CU!(qc, U, [...]) # controlled arbitrary unitary operator
 # three-site gates
 # toffoli!(qc, [...) # first two positions in array control qubits
 #
+
+# general multi-site gates
+#
+#
+#
+
 ```
+
 
 ### Subroutines
 
