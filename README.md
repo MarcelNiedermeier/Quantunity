@@ -477,6 +477,71 @@ QPE!(qc, U, 1, N_qubits)
 Similarly to before, one needs to specify the start and the width of the subroutine.
 
 
+
+### Grover Search
+
+--- show implementation of Grover oracle and Grover diffusor to find one and multiple marked elements ---
+
+We can also implement a simple instance of Grover's search algorithm with relatively simple means. For this we need to construct two objects: the phase oracle, which flips the sign of the marked computational basis state (or of multiple marked states in the general case) and the Grover diffusor, defined as H(2|0><0| - I)H. Without going into more details, the simplest way to construct those gates could be achieved as follows: for the phase oracle, we apply an X gate to every qubit line representing a 0 in the marked element. Then we apply a controlled Z gate depending on all of the other qubits on the bottom qubit, as finally undo the X gates from the first step. By construction, this operator will invert the sign of the marked element and act as as indentity on the others. All this is done by the function
+```
+phase_oracle_single!(qc, marked_element, start_pos) # e.g. marked_element = [0, 1, 0, 1]
+```
+where we need to specify the marked element and the start position of the subroutine (there could be other qubit registers which are unaffected by this).
+If we wanted to mark multiple elements, we could simply call this routine for each marked element. This isn't necessarily efficient, but implements the map correctly. The function
+```
+phase_oracle_multiple!(qc, marked_elements, start_pos) # e.g. marked_elements = [[0, 1, 0, 1], [1, 0, 0, 1]]
+```
+does exactly this, when a list of marked elements is given.
+
+The Grover diffusor can actually be implemented in a very similar manner, the only differences now being that the X gates in the previous function are applied to *all* qubit lines and that the diffusor is "wrapped" in Hadamard gates. Those operations are summarised in the function
+```
+Grover_diffusor!(qc, start_pos, num_qubits)
+```
+where `num_qubits` is the same as the length of the marked elements earlier. 
+
+Now let's put all of this together and find some marked elements! For the sake of simplicity, we choose a 4-qubit circuit and mark two out of the available 16 basis elements:
+```
+N = 4
+maxbond = 10
+N_meas = 100
+n_iterations = 1
+backend = "MPS_ITensor"
+marked_element1 = [1, 0, 1, 0] # 8 + 2 = 10
+marked_element2 = [0, 1, 0, 1] # 4 + 1 = 5
+marked_elements = [marked_element1, marked_element2]
+```
+Next, we initialise the circuit and set it into an equal superposition:
+```
+qc = initialise_qcircuit(N, backend, maxdim=maxbond)
+hadamard!(qc, [i for i in 1:N])
+```
+Now comes the crucial part: we loop over the phase oracle and the diffusor.
+```
+# apply Grover operator multiple times
+for i in 1:n_iterations
+
+    # apply Grover oracle
+    phase_oracle_multiple!(qc, marked_elements, 1)
+
+    # apply Grover diffusor
+    Grover_diffusor!(qc, 1, N)
+
+end
+```
+Here, we have only done a single iteration, but you can convince yourself that this is in fact already sufficient. Let's quickly draw the circuit:
+```
+1   |0⟩ -H-------○-------X---○---X---H---X---○---X---H--  2
+2   |0⟩ -H---X---○---X-------○-------H---X---○---X---H--  4
+3   |0⟩ -H-------○-------X---○---X---H---X---○---X---H--  2
+4   |0⟩ -H---X---U---X-------U-------H---X---U---X---H--
+```
+After the initial Hadamard, you can clearly see the two phase oracles marking the two basis vectors, as well as the Grover diffusor. All that's left to do now is to sample a measurement to see if the algorithm yields the sought basis states with fairly high probability:
+```
+sample_measurement(qc, [i for i in 1:N], N_meas)
+```
+You can convince yourself that this indeed already gives distinct peaks for the two marked elements after only a single iteration! Try to do more iterations and see what happens!
+
+
 ### Quantum Simulation
 
 --- Time evolution of a quantum state ---
