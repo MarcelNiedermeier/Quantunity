@@ -253,3 +253,8 @@ function cnot!(CGate::custom_gate, pos::Array{Int64, 1})
    update_representation_custom_gate!(CGate, pos, [Float64(pos[1]),
       Float64(pos[2]), 1.], true)
 end
+
+
+###################
+# multi-qubit gates
+###################

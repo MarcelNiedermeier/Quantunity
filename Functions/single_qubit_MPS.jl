@@ -12,7 +12,7 @@
 """ Auxiliary function to apply a given single-site gate "gateName" (as
 specified in the Hilbert space) to a quantum circuit in the positions
 given in the array pos. """
-function apply_single_site_gates!(qc::QC_IT_MPS, pos::Array{Int64, 1}, gateName::String)
+function apply_single_site_gates!(qc::QC_IT_MPS, pos, gateName::String)
 
     # loop through given positions and apply gate
     for i in pos
@@ -27,7 +27,7 @@ end
 """ Auxiliary function to apply a given single-site gate "gateName" (as
 specified in the Hilbert space, with additional parameter θ) to a
 quantum circuit in the positions given in the array pos. """
-function apply_single_site_gates!(qc::QC_IT_MPS, pos::Array{Int64, 1},
+function apply_single_site_gates!(qc::QC_IT_MPS, pos,
    gateName::String, θ::Number)
 
     # loop through given positions and apply gate
@@ -43,7 +43,7 @@ end
 """ Auxiliary function to apply a given single-site gate "gateName" (as
 specified in the Hilbert space, with additional parameters α, β, γ, δ) to a
 quantum circuit in the positions given in the array pos. """
-function apply_single_site_gates!(qc::QC_IT_MPS, pos::Array{Int64, 1}, gateName::String,
+function apply_single_site_gates!(qc::QC_IT_MPS, pos, gateName::String,
    α::Number, β::Number, γ::Number, δ::Number)
 
     # check unitarity
@@ -68,7 +68,7 @@ end
 
 """ Function to update the representation of a quantum circuit qc for a
 gate (specified by num) applied positions given through the array pos. """
-function update_representation_single_site!(qc::QC_IT_MPS, pos::Array{Int64, 1},
+function update_representation_single_site!(qc::QC_IT_MPS, pos,
    num::Int64)
     for i in 1:qc.NumQubits
         if i in pos
@@ -89,7 +89,7 @@ end
 
 """ Function to apply the (single-qubit) Hadamard gate to a quantum circuit qc
 in every position specified in the array pos. """
-function hadamard!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function Hadamard!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply Hadamard gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "H")
@@ -107,7 +107,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli X gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliX!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function PauliX!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply Pauli X gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "X")
@@ -125,7 +125,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli Y gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliY!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function PauliY!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply Pauli Y gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "Y")
@@ -143,7 +143,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli Z gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliZ!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function PauliZ!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply Pauli Z gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "Z")
@@ -161,7 +161,7 @@ end
 
 """ Function to apply the (single-qubit) √X gate to a quantum circuit qc
 in every position specified in the array pos. """
-function SqrtX!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function SqrtX!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply √X gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "√X")
@@ -179,7 +179,7 @@ end
 
 """ Function to apply the (single-qubit) S gate to a quantum circuit qc
 in every position specified in the array pos. """
-function SGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function SGate!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply S gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "S")
@@ -197,7 +197,7 @@ end
 
 """ Function to apply the (single-qubit) T gate to a quantum circuit qc
 in every position specified in the array pos. """
-function TGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
+function TGate!(qc::QC_IT_MPS, pos; update_rep=true)
 
    # apply T gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "T")
@@ -216,8 +216,7 @@ end
 """ Function to apply the (single-qubit) Ry gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the x-axis specified by θ."""
-function RXGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, θ::Number,
-   update_rep=true)
+function RxGate!(qc::QC_IT_MPS, pos, θ::Number; update_rep=true)
 
    # apply Rx gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "Rx", θ)
@@ -236,8 +235,7 @@ end
 """ Function to apply the (single-qubit) Ry gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the y-axis specified by θ."""
-function RYGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, θ::Number,
-   update_rep=true)
+function RyGate!(qc::QC_IT_MPS, pos, θ::Number; update_rep=true)
 
    # apply Ry gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "Ry", θ)
@@ -256,8 +254,7 @@ end
 """ Function to apply the (single-qubit) Rz gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the z-axis specified by θ."""
-function RZGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, θ::Number,
-   update_rep=true)
+function RzGate!(qc::QC_IT_MPS, pos, θ::Number; update_rep=true)
 
    # apply Rz gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "Rz", θ)
@@ -275,8 +272,7 @@ end
 
 """ Function to apply a phase shift by the angle θ to a quantum circuit
 qc in every position specified in the array pos. """
-function PhaseShift!(qc::QC_IT_MPS, pos::Array{Int64, 1}, θ::Number,
-   update_rep=true)
+function PhaseShift!(qc::QC_IT_MPS, pos, θ::Number; update_rep=true)
 
    # apply P gate(s) to quantum circuit
    apply_single_site_gates!(qc, pos, "P", θ)
@@ -293,13 +289,11 @@ end
 
 
 """ Function to apply custom-defined unitary operator U to a quantum circuit
-qc in every position specified in the array pos. The matrix is defined as
-U = [α β; γ δ] with the corresponding parameters. """
-function UGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, α::Number,
-   β::Number, γ::Number, δ::Number, update_rep=true)
+qc in every position specified in the array pos. """
+function UGate!(qc::QC_IT_MPS, U, pos; update_rep=true)
 
    # apply U gate(s) to quantum circuit
-   apply_single_site_gates!(qc, pos, "U", α, β, γ, δ)
+   apply_single_site_gates!(qc, pos, "U", U[1, 1], U[1, 2], U[2, 1], U[2, 2])
 
    # update representing matrix of quantum circuit
    if update_rep
@@ -309,41 +303,4 @@ function UGate!(qc::QC_IT_MPS, pos::Array{Int64, 1}, α::Number,
    # update circuit depth and bond dimension
    qc.CircuitDepth += 1
    push!(qc.BondDim, maxlinkdim(qc.StateVector))
-end
-
-
-#################
-# Random Circuits
-#################
-
-
-""" Function to apply a (different) random unitary single-site gate to a
-quantum circuit in the positions given in the array pos. """
-function random_single_site_gates!(qc::QC_IT_MPS, pos::Array{Int64, 1}, update_rep=true)
-
-    # loop through given positions, generate random unitary and apply
-    for i in pos
-
-        # get random angles
-        α = 2π * rand()
-        β = 2π * rand()
-        γ = 2π * rand()
-        δ = 2π * rand()
-
-        # sample random unitary 2x2 matrix, apply
-        gate = op("RandU", qc.IndexSet[i]; α=α, β=β, γ=γ, δ=δ)
-        updatedTensor = gate*qc.StateVector[i]
-        noprime!(updatedTensor)
-        qc.StateVector[i] = updatedTensor
-    end
-
-    # update representing matrix of quantum circuit
-    if update_rep
-      update_representation_single_site!(qc, pos, 19)
-   end
-
-    # update circuit depth and bond dimension
-    qc.CircuitDepth += 1
-    push!(qc.BondDim, maxlinkdim(qc.StateVector))
-
 end

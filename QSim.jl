@@ -18,6 +18,9 @@ using DelimitedFiles
 #using CSV
 using DataFrames
 using AbstractAlgebra
+using JLD2
+using Plots
+using Statistics
 
 
 
@@ -47,10 +50,12 @@ mutable struct QC
     StateVector::Vector{ComplexF64}
     NumQubits::Int32
     CircuitDepth::Int32
+    NumMeasurements::Int32
 
     # if (single) measurements are performed, save results as classical bits
     ClassicalBits::SortedDict
     ClassicalBitsProportion::SortedDict
+    MeasurementResult::Dict
 
     # keep track of gates in circuit
     Representation::SortedDict
@@ -89,10 +94,12 @@ mutable struct QC_IT_MPS
     StateVector::MPS
     NumQubits::Int32
     CircuitDepth::Int32
+    NumMeasurements::Int32
     IndexSet::Vector{Index{Int64}}
     MaxBondDim::Int32
     BondDim::Array # obtain list of bond dims (for each layer)
     ContractionMethod::String # method for MPS-MPO contractions
+    EntanglementEntropy::Array
 
     # fidelities
     TwoQubitFidelity::Array
@@ -108,6 +115,7 @@ mutable struct QC_IT_MPS
     # if (single) measurements are performed, save results as classical bits
     ClassicalBits::SortedDict
     ClassicalBitsProportion::SortedDict
+    MeasurementResult::Dict
 
     # keep track of gates in circuit
     Representation::SortedDict
@@ -163,6 +171,7 @@ function initialise_state(N, random=false)
         psi = rand(Complex{Float64}, 2^N)
         psi = psi/norm(psi)
     else
+        println("N = $(N)")
         psi = Complex.(zeros(2^N))
         psi[1] = 1.0
     end
@@ -194,7 +203,7 @@ end
 the lintop parameter, one may specify a linear topology or a master topology
 of the qubits. The backend parameter determines whether the circuit is built
 from Julia arrays or ITensor MPS objects. """
-function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
+function initialise_qcircuit(N, backend="MPS_ITensor"; lintop=false, maxdim=100,
     contmethod="naive", random=false, randombond=16)
 
     # check inputs
@@ -213,7 +222,7 @@ function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
     # initialise state vector and construct circuit object, depending on backend
     if backend == "ED_Julia"
         psi = initialise_state(N, random)
-        qcircuit = QC(psi, N, 0, SortedDict(), SortedDict(), SortedDict(), SortedDict(),
+        qcircuit = QC(psi, N, 0, 100, SortedDict(), SortedDict(), Dict(), SortedDict(), SortedDict(),
         Dict(), false, lintop)
     else
         sites = siteinds("QCircuit", N)
@@ -222,9 +231,9 @@ function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
         else
             psi = productMPS(sites, "0")
         end
-        qcircuit = QC_IT_MPS(psi, N, 0, sites, maxdim, [maxlinkdim(psi)], contmethod,
+        qcircuit = QC_IT_MPS(psi, N, 0, 100, sites, maxdim, [maxlinkdim(psi)], contmethod, [],
         [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], SortedDict(), SortedDict(),
-        SortedDict(), SortedDict(), Dict(), false, lintop)
+        Dict(), SortedDict(), SortedDict(), Dict(), false, lintop)
     end
 
     # set up representation of circuit
@@ -237,8 +246,8 @@ function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
     qcircuit.ConversionTable[0] = "----"
     qcircuit.ConversionTable[1] = "-H--"
     qcircuit.ConversionTable[2] = "-X--"
-    qcircuit.ConversionTable[3] = "-○--"
-    qcircuit.ConversionTable[-3] = "-+--"
+    qcircuit.ConversionTable[3] = "-ο--"
+    qcircuit.ConversionTable[-3] = "-⊕--" # ⊕ , +
     qcircuit.ConversionTable[4] = "-⊗--"
     qcircuit.ConversionTable[-4] = "-⊗--"
     qcircuit.ConversionTable[5] = "-Z--"
@@ -249,10 +258,10 @@ function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
     qcircuit.ConversionTable[10] = "-Rʸ-"
     qcircuit.ConversionTable[11] = "-Rᶻ-"
     qcircuit.ConversionTable[12] = "-P--"
-    qcircuit.ConversionTable[13] = "-○--"
+    qcircuit.ConversionTable[13] = "-ο--" #  ○
     qcircuit.ConversionTable[-13] = "-U--"
-    qcircuit.ConversionTable[14] = "-○--"
-    qcircuit.ConversionTable[-14] = "-+--"
+    qcircuit.ConversionTable[14] = "-ο--"
+    qcircuit.ConversionTable[-14] = "-⊕--"
     qcircuit.ConversionTable[15] = "-|--"
     qcircuit.ConversionTable[16] = "-M--"
     qcircuit.ConversionTable[17] = "---M"
@@ -262,10 +271,14 @@ function initialise_qcircuit(N, lintop=false, backend="MPS_ITensor", maxdim=100,
     qcircuit.ConversionTable[21] = " |--"
     qcircuit.ConversionTable[22] = "-+++"
     qcircuit.ConversionTable[23] = "++--"
-    qcircuit.ConversionTable[24] = "-○--"
-    qcircuit.ConversionTable[-24] = "-Rn-"
+    #qcircuit.ConversionTable[24] = "-ο--"
+    qcircuit.ConversionTable[24] = "-Rn-"
     qcircuit.ConversionTable[25] = "-U--"
     qcircuit.ConversionTable[-25] = "-U--"
+    qcircuit.ConversionTable[26] = "√⊗--"
+    qcircuit.ConversionTable[-26] = "√⊗--"
+    qcircuit.ConversionTable[27] = "⊗^β-"
+    qcircuit.ConversionTable[-27] = "⊗^β-"
 
     return qcircuit
 end
@@ -286,14 +299,14 @@ function draw(qc::QC, full=false)
     # check desired printing format
     if full
         qc_rep = qc.RepresentationFull
-        println("Schematic representation of full quantum circuit, depth = $(qc.CircuitDepth): ")
+        println("Schematic representation of full quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
         if length(collect(values(qc_rep))[1]) > maxprintlength
             println("Circuit too long to be printed in terminal!")
             println("Cutting after $maxprintlength gates.")
         end
     else
         qc_rep = qc.Representation
-        println("Schematic representation of quantum circuit, depth = $(qc.CircuitDepth): ")
+        println("Schematic representation of quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
         if length(collect(values(qc_rep))[1]) > maxprintlength
             println("Circuit too long to be printed in terminal!")
             println("Cutting after $maxprintlength gates.")
@@ -348,7 +361,7 @@ function draw(qc::QC_IT_MPS, full=false)
     if full
         qc_rep = qc.RepresentationFull
         println("\n")
-        println("Schematic representation of full quantum circuit, depth = $(qc.CircuitDepth): ")
+        println("Schematic representation of full quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
         println("Maximum possible bond dimension: $(2^(qc.NumQubits÷2))")
         println("Maximum allowed bond dimension before truncation: $(qc.MaxBondDim)")
         if length(collect(values(qc_rep))[1]) > maxprintlength
@@ -358,7 +371,7 @@ function draw(qc::QC_IT_MPS, full=false)
     else
         qc_rep = qc.Representation
         println("\n")
-        println("Schematic representation of quantum circuit, depth = $(qc.CircuitDepth): ")
+        println("Schematic representation of quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
         println("Maximum possible bond dimension: $(2^(qc.NumQubits÷2))")
         println("Maximum allowed bond dimension before truncation: $(qc.MaxBondDim)")
         if length(collect(values(qc_rep))[1]) > maxprintlength
@@ -619,6 +632,145 @@ function make_histogram(qc::QC_IT_MPS, t, title::String, path::String, maxdim::I
 end
 
 
+####################
+# Save and load data
+####################
+
+
+""" Function to save the data generated from a quantum circuit run. It is
+saved as a dictionary within the JLD2 package (HDF5). The standard circuit
+data is saved automatically, other data (e.g. lists of qubit numbers or
+bond dimensions that are looped over) need to be given as a "list of
+lists" in the other_data variable. """
+function save_data(qc::QC, path::String, other_data; style="standard")
+
+    if style ∉ ["standard", "no_measurement", "custom"]
+        error("Please specify a correct style to save the data (standard,
+            no_measurement, custom)")
+    end
+
+    if style == "standard"
+
+        # get measurement results from quantum circuit
+        states = collect(keys(qc.ClassicalBitsProportion))
+        probs = collect(values(qc.ClassicalBitsProportion))
+
+        # save main data
+        d = Dict(
+            "N" => qc.NumQubits,
+            "N_meas" => qc.NumMeasurements,
+            "backend" => "ED_Julia",
+            "states" => states,
+            "probs" => probs
+            )
+
+    # no record of measurement desired
+    elseif style == "no_measurement"
+
+        # save main data
+        d = Dict(
+            "N" => qc.NumQubits,
+            "backend" => "ED_Julia"
+            )
+    else # style == "custom"
+        d = Dict()
+    end
+
+    # add remaining data to dictionary
+    for data in other_data
+        d[String(:data)] = data
+    end
+
+    # save in desired location
+    save(path, d)
+
+end
+
+
+""" Function to save the data generated from a quantum circuit run. It is
+saved as a dictionary within the JLD2 package (HDF5). The standard circuit
+data is saved automatically, other data (e.g. lists of qubit numbers or
+bond dimensions that are looped over) need to be given as a "list of
+lists" in the other_data variable. """
+function save_data(qc::QC_IT_MPS, path::String, other_data; style="standard")
+
+    if style ∉ ["standard", "no_measurement", "custom"]
+        error("Please specify a correct style to save the data (standard,
+            no_measurement, custom)")
+    end
+
+    if style == "standard"
+
+        # get measurement results from quantum circuit
+        states = collect(keys(qc.ClassicalBitsProportion))
+        probs = collect(values(qc.ClassicalBitsProportion))
+
+        # save main data
+        d = Dict(
+            "N" => qc.NumQubits,
+            "N_meas" => qc.NumMeasurements,
+            "backend" => "MPS_ITensor",
+            "maxdim" => qc.MaxBondDim,
+            "states" => states,
+            "probs" => probs
+            )
+
+    # no record of measurement desired
+    elseif style == "no_measurement"
+
+        # save main data
+        d = Dict(
+            "N" => qc.NumQubits,
+            "backend" => "MPS_ITensor",
+            "maxdim" => qc.MaxBondDim
+            )
+    else # style == "custom"
+        d = Dict()
+    end
+
+    # add remaining data to dictionary
+    for data in other_data
+        d[String(:data)] = data
+    end
+
+    # save in desired location
+    save_object(path, d)
+
+
+end
+
+
+""" Function to save the data generated in a script without reference to
+the quantum circuit object (neede for instance when several loops over
+quantum circuit objects are needed and the parameters of a single circuit
+aren't crucial). """
+function save_data(path::String, dataset)
+
+    # define dictionary to save data
+    d = Dict()
+
+    # add data to dictionary
+    for data in dataset
+        if typeof(data) != Symbol
+            error("You need to specify the data to be saved as a list of Symbols.")
+        end
+        d[String(data)] = eval(data)
+    end
+
+    # save in desired location
+    save_object(path, d)
+
+end
+
+
+""" Function to load the data saved via JLD2 in a specific location. """
+function load_data(path)
+    # is saved as dictionary of a dictionary, select correct "layer"
+    return load(path)["single_stored_object"]
+end
+
+
+
 ###############################################
 # Imports of quantum simulation functionalities
 ###############################################
@@ -627,6 +779,7 @@ end
 # Hilbert space
 ###############
 
+# definition of important operators
 include("Hilbert_space_QC.jl")
 
 
@@ -634,6 +787,7 @@ include("Hilbert_space_QC.jl")
 # Measurements
 ##############
 
+# projective and statistical measurements
 include("measurement.jl")
 
 
@@ -644,27 +798,38 @@ include("measurement.jl")
 include("Functions/single_qubit.jl")
 include("Functions/single_qubit_MPS.jl")
 
+###################
+# Multi-qubit gates
+###################
+
+# multiply-controlled single- and multi-qubit gates
+include("Functions/multi_qubit_MPS.jl")
+
 
 #################
 # Two-qubit gates
 #################
 
+# probably soon to be deprecated
 include("Functions/two_qubit.jl")
-include("Functions/two_qubit_MPS.jl")
+#include("Functions/two_qubit_MPS.jl")
 
 
 ###################
 # Three-qubit gates
 ###################
 
+# probably soon to be deprecated
 include("Functions/three_qubit.jl")
-include("Functions/three_qubit_MPS.jl")
+#include("Functions/three_qubit_MPS.jl")
 
 
 ############################
 # Arbitrary controlled gates
 ############################
 
+# general functions constructing multi-qubit gates
+include("Functions/arbitrary_CU.jl")
 include("Functions/arbitrary_CU_MPS.jl")
 
 
@@ -672,6 +837,7 @@ include("Functions/arbitrary_CU_MPS.jl")
 # Custom gates
 ##############
 
+# grouping multiple gates into a custom gate block
 include("Functions/custom_gate.jl")
 
 
@@ -679,6 +845,7 @@ include("Functions/custom_gate.jl")
 # Subroutines
 #############
 
+# most important quantum algorithms as ready-made subroutines
 include("Functions/subroutines.jl")
 
 

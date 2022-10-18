@@ -4,6 +4,10 @@
 #################################################
 
 
+##########################
+# Statistical Measurements
+##########################
+
 """ Function to sample the measurements of the quantum circuit qc N_meas times.
 Register specifies the sequence of qubits to be measured; can be an arbitrary
 subregister of the full state. Prints out the different outcomes with their
@@ -13,8 +17,8 @@ of the wave function (as multiple samples are usually desired). Only shows the
 measured states which have a frequency of occurrence bigger than eps (in order
 to keep the output more readable and to suppress low-probability states).
 ED VERSION FOR JULIA ARRAYS!"""
-function sample_measurement(qc::QC, register::Array{Int64, 1}, N_meas=100,
-    eps=0.005, verbose=true, save_measurement=true)
+function sample_measurement(qc::QC, register::Array{Int64, 1}, N_meas=100;
+    eps=0.005, verbose=true, save_measurement=true, plot=true)
 
     # check correct ordering of values in register
     for i in 1:length(register)-1
@@ -22,6 +26,9 @@ function sample_measurement(qc::QC, register::Array{Int64, 1}, N_meas=100,
             error("Wrong ordering of qubit indices in register.")
         end
     end
+
+    # save number of measurements in quantum circuit
+    qc.NumMeasurements = N_meas
 
     # obtain full probability distribution from wavefunction
     N_qubits = qc.NumQubits
@@ -64,9 +71,32 @@ function sample_measurement(qc::QC, register::Array{Int64, 1}, N_meas=100,
     end
 
     samp = proportionmap(samp)
+    #println("samp ", samp)
     for key in sort!(collect(keys(samp)))
-        #qc.ClassicalBitsProportion[key] = samp[key]
-        qc.ClassicalBitsProportion[samp[key]] = key
+        qc.ClassicalBitsProportion[key] = samp[key]
+        #qc.ClassicalBitsProportion[samp[key]] = key
+    end
+    #println("qc.ClassicalBitsProportion ", qc.ClassicalBitsProportion)
+
+    # save full measurement results
+    found_states = collect(keys(samp))
+    for st in states_marg
+        if st in found_states
+            qc.MeasurementResult[st] = samp[st]
+        else
+            qc.MeasurementResult[st] = 0.
+        end
+    end
+    #println("full measurement results ", qc.MeasurementResult)
+
+    # make (rudimentary) plot
+    if plot
+        freqs = collect(values(qc.MeasurementResult))
+        states_dec = bit_array_to_int.(collect(keys(qc.MeasurementResult)))
+        p = bar(states_dec, freqs, label="measurement")
+        xlabel!("states (decimal expansion)")
+        ylabel!("frequency")
+        display(p)
     end
 
     # summarise result of measurements
@@ -111,8 +141,8 @@ very few samples of a large register of a state with very high bond dimension,
 the SVD-based algorithm should be preferred (especially if large statistics
 are desired).
 MPS VERSION FOR ITENSOR! """
-function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100,
-    eps=0.005, verbose=true, algorithm="ITensor", save_measurement=true)
+function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100;
+    eps=0.005, verbose=true, algorithm="ITensor", save_measurement=true, plot=true)
 
     if algorithm ∉ ["ITensor", "SVDbased", "DirectSampling"]
         error("Invalid choice of algorithm (either SVDbased or DirectSampling).")
@@ -124,6 +154,9 @@ function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100
             error("Wrong ordering of qubit indices in register.")
         end
     end
+
+    # save number of measurements in quantum circuit
+    qc.NumMeasurements = N_meas
 
     # sample array of measurements
     if algorithm == "SVDbased"
@@ -153,10 +186,31 @@ function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100
         #qc.ClassicalBitsProportion[freq[key]] = key
     end
 
-    states_tmp = collect(keys(qc.ClassicalBitsProportion))
-    probs_tmp = collect(values(qc.ClassicalBitsProportion))
-    #println("sample: probs_tmp = ", probs_tmp)
-    #println("sample: states_tmp = ", states_tmp)
+    if save_measurement
+        N_register = 2^length(register)
+        states_marg = [reverse(digits(i, base=2, pad=length(register))) for i in 0:N_register-1]
+
+        # save full measurement results
+        found_states = collect(keys(freq))
+        for st in states_marg
+            if st in found_states
+                qc.MeasurementResult[st] = freq[st]
+            else
+                qc.MeasurementResult[st] = 0.
+            end
+        end
+
+        # make (rudimentary) plot
+        if plot
+            freqs = collect(values(qc.MeasurementResult))
+            states_dec = bit_array_to_int.(collect(keys(qc.MeasurementResult)))
+            p = bar(states_dec, freqs, label="measurement")
+            xlabel!("states (decimal expansion)")
+            ylabel!("frequency")
+            annotate!((100, 0.2, "χ = $(maxdim)"))
+            display(p)
+        end
+    end
 
     # ignore measurement results if probability smaller than eps
     for (key, value) in freq
@@ -193,6 +247,10 @@ function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100
 end
 
 
+#########################
+# Projective Measurements
+#########################
+
 """ Function to perform a measurement of the quantum circuit qc.
 Register specifies the sequence of qubits to be measured; can be an arbitrary
 subregister of the full state. In contrast to the function sample_measurement(),
@@ -208,7 +266,7 @@ two algorithms to draw the sample of the MPS. In case a large subregister of an
 MPS with high bond dimension is sampled, the direct sampling should be preferred,
 otherwise the SVD-based sampling.
 MPS VERSION FOR ITENSOR! """
-function projective_measurement!(qc::QC_IT_MPS, register::Array{Int64, 1},
+function projective_measurement!(qc::QC_IT_MPS, register::Array{Int64, 1};
     verbose=true, algorithm="SVDbased")
 
     if algorithm ∉ ["SVDbased", "DirectSampling"]
@@ -295,7 +353,7 @@ measurement are saved as classical bits in the ClassicalBits dictionary of the
 quantum circuit object. Note that the explicit contruction of the projector
 requires projecting the state onto a 2^(N-length(register))-dimensional subspace!
 ED VERSION FOR JULIA ARRAYS! """
-function projective_measurement!(qc::QC, register::Array{Int64, 1}, verbose=true)
+function projective_measurement!(qc::QC, register::Array{Int64, 1}; verbose=true)
 
     # check correct ordering of values in register
     for i in 1:length(register)-1
@@ -377,6 +435,10 @@ function projective_measurement!(qc::QC, register::Array{Int64, 1}, verbose=true
     end
 end
 
+
+############################
+# Samling, MPS Manipulations
+############################
 
 """ Function to compute the wavefunction coefficient of a given bitstring
 in a quantum state represented by an MPS (by direct sequential contraction).

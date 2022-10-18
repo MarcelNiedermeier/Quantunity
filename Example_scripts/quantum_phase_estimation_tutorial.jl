@@ -8,11 +8,12 @@
 include("../QSim.jl")
 
 # set constants
-n_prec = 8 # bits of precision
-n_prob = 4 # number determines success probability
+n_prec = 7 # bits of precision
+n_prob = 2 # number determines success probability
 maxdim = 12
 N_meas = 5000
-backend = "MPS_ITensor"
+#backend = "MPS_ITensor"
+backend = "ED_Julia"
 initialisation = "superposition" # or "-" or "+"
 contmethod = "naive"
 random = false
@@ -78,7 +79,7 @@ N = 1 + n_prec + n_prob
 θ2 = 1/√5
 
 # intialise quantum circuit
-qc_MPS = initialise_qcircuit(N, lintop, "MPS_ITensor", maxdim, contmethod,
+qc_MPS = initialise_qcircuit(N, lintop, backend, maxdim, contmethod,
 random, randombond)
 
 # initialise phase estimation register
@@ -108,7 +109,11 @@ end
 invQFT!(qc_MPS, 1, N-1)
 
 # measurement, "DirectSampling" or "SVDbased" or "ITensor"
-sample_measurement(qc_MPS, [i for i in 1:(n_prec)], N_meas, eps, true, "ITensor", true)
+if backend == "MPS_ITensor"
+    sample_measurement(qc_MPS, [i for i in 1:(n_prec)], N_meas, eps, true, "ITensor", true)
+else
+    sample_measurement(qc_MPS, [i for i in 1:(n_prec)], N_meas, eps)
+end
 
 # check what it looks like
 draw(qc_MPS)
@@ -118,6 +123,7 @@ draw(qc_MPS)
 meas_max, probs_max = get_highest_prob_measurement(qc_MPS, 2)
 phases = []
 for state in meas_max
+    println("state ", state)
     push!(phases, recover_phase_estimate(state))
 end
 

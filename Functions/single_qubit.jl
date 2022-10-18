@@ -366,7 +366,7 @@ end
 
 """ Function to apply a (different) random unitary single-site gate to a
 quantum circuit in the positions given in the array pos. """
-function random_single_site_gates!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function random_single_site_gates!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
     # get identity
     s = Index(2, "QCircuit")
