@@ -811,9 +811,9 @@ function Grover_diffusor!(qc, start_pos, num_qubits; recordEE=false,
     compact_rep=false, α=1, cutoff=1E-3)
 
     # check if number of available control qubits not exceeded
-    if num_qubits-1 > 20
-        error("Number of currently available control exceeded!")
-    end
+    #if num_qubits-1 > 20
+    #    error("Number of currently available control exceeded!")
+    #end
 
     # if compact representation desired: suppress representations of gate functions
     if compact_rep
@@ -859,9 +859,10 @@ function C_Grover_diffusor!(qc, control_qubit, start_pos,
     num_qubits; compact_rep=false, recordEE=false, α=1, cutoff=1E-3)
 
     # check if number of available control qubits not exceeded
-    if num_qubits-1 > 20
-        error("Number of currently available control exceeded!")
-    elseif length(control_qubit) > 1
+    #if num_qubits-1 > 20
+    #    error("Number of currently available control exceeded!")
+    #elseif length(control_qubit) > 1
+    if length(control_qubit) > 1
         error("Too many control qubits given (only one).")
     end
 
