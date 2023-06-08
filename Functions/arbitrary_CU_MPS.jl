@@ -263,6 +263,8 @@ elseif U ∈ ["Rx", "Ry", "Rz", "P", "Rn"]
     # gates with multiple parameters
     elseif U ∈ ["U"]
 
+        #println("params = ", params)
+
         # get gate matrix
         s = Index(2, "QCircuit")
         gate_matrix = array(op(U, s; α=params[1], β=params[2], γ=params[3],
@@ -294,6 +296,10 @@ elseif U ∈ ["Rx", "Ry", "Rz", "P", "Rn"]
         target_space01 = Tuple(target_space01)
         target_space10 = Tuple(target_space10)
         target_space11 = Tuple(target_space11)
+        #println(target_space00)
+        #for item in target_space00
+        #    println(typeof(item))
+        #end
         cu += target_space00
         cu += target_space01
         cu += target_space10

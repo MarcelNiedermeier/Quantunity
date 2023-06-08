@@ -195,6 +195,24 @@ function SGate!(qc::QC_IT_MPS, pos; update_rep=true)
 end
 
 
+""" Function to apply the (single-qubit) S† gate to a quantum circuit qc
+in every position specified in the array pos. """
+function S_dagGate!(qc::QC_IT_MPS, pos; update_rep=true)
+
+   # apply S gate(s) to quantum circuit
+   apply_single_site_gates!(qc, pos, "S†")
+
+   # update representing matrix of quantum circuit
+   if update_rep
+      update_representation_single_site!(qc, pos, 7)
+   end
+
+   # update circuit depth and bond dimension
+   qc.CircuitDepth += 1
+   push!(qc.BondDim, maxlinkdim(qc.StateVector))
+end
+
+
 """ Function to apply the (single-qubit) T gate to a quantum circuit qc
 in every position specified in the array pos. """
 function TGate!(qc::QC_IT_MPS, pos; update_rep=true)

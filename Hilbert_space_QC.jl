@@ -153,6 +153,15 @@ function ITensors.op!(Op::ITensor, ::OpName"S",
 end
 
 
+function ITensors.op!(Op::ITensor, ::OpName"S†",
+    ::SiteType"QCircuit", s::Index)
+
+    Op[s'=>1, s=>1] = Complex(1.0)
+    Op[s'=>2, s=>2] = -1.0im
+
+end
+
+
 function ITensors.op!(Op::ITensor, ::OpName"T",
     ::SiteType"QCircuit", s::Index)
 

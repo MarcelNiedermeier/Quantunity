@@ -850,6 +850,14 @@ include("Functions/custom_gate.jl")
 include("Functions/subroutines.jl")
 
 
+########################
+# Topological Quantities
+########################
+
+# Quantum algorithms to calculate Berry phase and Chern number
+include("Functions/topological_quantities.jl")
+
+
 #################################
 # Exact evaluations of algorithms
 #################################

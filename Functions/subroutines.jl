@@ -661,14 +661,17 @@ function get_highest_prob_measurement(qc, k::Int)
     # get probabilities and obtain list of k highest values
     probas_tmp = collect(values(qc.ClassicalBitsProportion))
     sort!(probas_tmp, rev=true)
-    max_probas = probas_tmp[1:k]
+    if length(probas_tmp) >= k
+        max_probas = probas_tmp[1:k]
+    else
+        max_probas = probas_tmp[:]
+    end
 
     # find indices of k highest probabilities and find corresponding bitstrings
     ind = findall(x -> x ∈ max_probas, collect(values(qc.ClassicalBitsProportion)))
     measurements_max = collect(keys(qc.ClassicalBitsProportion))[ind]
 
     return measurements_max, max_probas
-
 end
 
 
@@ -678,9 +681,16 @@ function QPE_get_phase(qc, k=1)
     # get highest prob measured bitstrings
     states_max, probs_max = get_highest_prob_measurement(qc, k)
 
+    # safeguard in case less than k phases are actually measured
+    if length(states_max) >= k
+        num_phases = k
+    else
+        num_phases = length(states_max)
+    end
+
     # convert bitstrings to phases, rescale to [0, 2π]
-    phases = zeros(k)
-    for i in 1:k
+    phases = zeros(num_phases)
+    for i in 1:num_phases
         phases[i] = 2π * recover_phase_estimate(states_max[i])
     end
 

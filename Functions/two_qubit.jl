@@ -806,7 +806,7 @@ acted on. The control qubit can be "above" or "below" the action qubit,
 the function implements the desired arrangement. Depending on whether a
 linear or a master topology is chosen, the CU gate is either constructed
 with auxiliary swaps or implemented directly as a matrix. """
-function CU!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
+function C_UGate!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
 
     # check correct format of indices
     if length(pos) != 2
@@ -1100,7 +1100,7 @@ function sequential_cnot!(qc::QC, pos::Number, num::Number, update_rep=false)
 
         # even number of qubits
         if iseven(num)
-            
+
             for i in pos:2:(pos+num-1)
                 #println("applying CNOT on $i, $(i+1)")
                 gate = kron(gate, cnot)

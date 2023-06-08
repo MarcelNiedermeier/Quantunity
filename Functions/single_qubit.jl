@@ -62,7 +62,7 @@ end
 
 """ Function to apply the (single-qubit) Hadamard gate to a quantum circuit qc
 in every position specified in the array pos. """
-function hadamard!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function Hadamard!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -327,11 +327,35 @@ function PhaseShift!(qc::QC, pos::Array{Int64, 1}, θ::Number, update_rep=true)
 end
 
 
+
+#""" Function to apply custom-defined unitary operator U to a quantum circuit
+#qc in every position specified in the array pos. """
+#function UGate!(qc::QC_IT_MPS, U, pos; update_rep=true)
+#
+#   # apply U gate(s) to quantum circuit
+#   apply_single_site_gates!(qc, pos, "U", U[1, 1], U[1, 2], U[2, 1], U[2, 2])
+#
+#   # update representing matrix of quantum circuit
+#   if update_rep
+#      update_representation_single_site!(qc, pos, 19)
+#   end
+#
+#   # update circuit depth and bond dimension
+#   qc.CircuitDepth += 1
+#   push!(qc.BondDim, maxlinkdim(qc.StateVector))
+#end
+
+
+
 """ Function to apply custom-defined unitary operator U to a quantum circuit
 qc in every position specified in the array pos. The matrix is defined as
 U = [α β; γ δ] with the corresponding parameters. """
-function UGate!(qc::QC, pos::Array{Int64, 1}, α::Number, β::Number,
-   γ::Number, δ::Number, update_rep=true)
+function UGate!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
+
+   α = U[1, 1]
+   β = U[1, 2]
+   γ = U[2, 1]
+   δ = U[2, 2]
 
    # get matrices
    s = Index(2, "QCircuit")
