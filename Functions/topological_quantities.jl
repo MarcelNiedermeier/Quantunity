@@ -189,96 +189,6 @@ function Chern_number(H, params, Nk, band_index=1)
 end
 
 
-######################################
-# Variational ground state preparation
-######################################
-
-# Unfinished functions to set up the ground state preparation (for
-# a 2x2 Bloch Hamiltonian) variationally.
-
-
-""" Function to calculate the expectation value of σx, σy or σz for a
-1-qubit quantum circuit. """
-function get_expectation_value(qc, op, N_meas)
-
-    # rotate to right basis
-    if op == "X"
-        RyGate!(qc, [1], -π/2)
-
-    elseif op == "Y"
-        RxGate!(qc, [1], π/2)
-    end
-    sample_measurement(qc, [1], N_meas, plot=false, verbose=false)
-
-    # evaluate expectation value
-    meas_freqs = collect(values(qc.MeasurementResult))
-    exp_value = (+1)*meas_freqs[1] + (-1)*meas_freqs[2]
-
-    return exp_value
-end
-
-
-""" Function to get the estimated ground state energy of a Bloch Hamiltonian
-of the form H = a*σx + b*σy + c*σz, with three rotation angles to be optimised. """
-function energy_expectation_value_HBloch(params, a, b, c, N_meas; N_qubits=1, backend="MPS_ITensor", maxbond=2)
-
-    # parameters to be optimised
-    θ1 = params[1]
-    θ2 = params[2]
-    θ3 = params[3]
-
-    # save expectation values and loop through circuit
-    exp_vals = []
-    for op in ["X", "Y", "Z"]
-
-        # prepare quantum circuit
-        local qc_var = initialise_qcircuit(N_qubits, backend, maxdim=maxbond)
-        RxGate!(qc_var, [1], θ1)
-        RzGate!(qc_var, [1], θ2)
-        RxGate!(qc_var, [1], θ3)
-
-        # measure each expectation value
-        push!(exp_vals, get_expectation_value(qc, op, N_meas))
-
-    end
-
-    # construct energy estimate
-    E_est = a*exp_vals[1] + b*exp_vals[2] + c*exp_vals[2]
-    return E_est
-end
-
-
-""" Function to variationally minimise the ground state of the momentum
-space QWZ Hamiltonian for each point in the Brillouin zone. """
-function variational_ground_state_prep_QWZ(Nk, u; filled=true)
-
-    # get Brillouin zone
-    δk = 2π/Nk
-    kxs = [-π + i*δk for i in 1:Nk]
-    kys = [-π + i*δk for i in 1:Nk]
-
-    optimised_params = zeros(Nk, Nk, 3)
-
-    # loop through BZ
-    for i in 1:Nk
-        for j in 1:Nk
-
-            # params for H at given point in BZ
-            a = sin(kxs[i])
-            b = sin(kys[j])
-            c = u + cos(kxs[i]) + cos(kys[j])
-
-            # do optimisation
-            initial = [0., 0., 0.]
-            result = optimize(params -> energy_expectation_value_HBloch(params, a, b, c, N_meas), initial, iterations=50000, allow_f_increases=true)
-
-
-        end
-    end
-
-end
-
-
 ###########################################
 # Quantum Circuit measuring the Berry Phase
 ###########################################
@@ -793,7 +703,6 @@ function adiabatic_plaquette_loop!(qc, H, kx, ky, params, N_link, δk, dt)
 end
 
 
-
 """ Function to perform an adiabatic double loop around a plaquette to calculate
 the Berry flux. Starting point of the plaquette is given. On the first loop,
 the time evolution is positive and on the second loop it is negative,
@@ -878,7 +787,7 @@ end
 
 """ Function to perform a Hadamard test to evaluate the Berry flux for a
 given plaquette via an adiabatic double loop around the plaquette. """
-function Hadamard_test_adiabatic_loop(H, params, U, kx, ky, N_link, δk, dt, N_meas; N_qubits=2, backend="MPS_ITensor", maxbond=10)
+function Berry_flux_adiabatic_loop_HT(H, params, U, kx, ky, N_link, δk, dt, N_meas; N_qubits=2, backend="MPS_ITensor", maxbond=10)
 
     # initialise quantum circuit, set to eigenstate in plaquette
     qc_plaq = initialise_qcircuit(N_qubits, backend, maxdim=maxbond)
@@ -897,6 +806,7 @@ function Hadamard_test_adiabatic_loop(H, params, U, kx, ky, N_link, δk, dt, N_m
     # evaluate Berry flux
     meas_freqs_sin = collect(values(qc_plaq.MeasurementResult))
 
+    # Berry fluxes per plaquette are small, the below asin recovers them correctly
     P_0_sin = meas_freqs_sin[1]
     #P_0_sin = meas_freqs_sin[2]
     println("sin(2θ) = ", 1 - 2*P_0_sin)
@@ -904,42 +814,46 @@ function Hadamard_test_adiabatic_loop(H, params, U, kx, ky, N_link, δk, dt, N_m
 end
 
 
-""" Function implementing the Berry phase calculation for a given plaquette
-via an adiabatic loop with a QPE.  """
-function adiabatic_loop_QPE(H, params, kx, ky, dt, N_link, δk, N_qubits, n_prec, N_meas; backend="MPS_ITensor", maxbond=20)
+# PROBABLY NOT SUITABLE FOR HIGH-PRECISION CALCULATIONS
+""" Function implementing the Berry flux calculation for a given plaquette
+via an adiabatic double loop with a QPE.  """
+function Berry_flux_adiabatic_loop_QPE(H, params, U, kx, ky, dt, N_link, δk, N_qubits, n_prec, N_meas; backend="MPS_ITensor", maxbond=20)
 
     # get quantum circuit
-    qc = initialise_qcircuit(N_qubits, backend, maxdim=maxbond)
+    qc_plaq = initialise_qcircuit(N_qubits, backend, maxdim=maxbond)
 
     # initialise phase estimation register
-    Hadamard!(qc, [i for i in 1:N_qubits-1])
+    Hadamard!(qc_plaq, [i for i in 1:N_qubits-1])
 
     # add extra phase to |1⟩ to map Berry phase into correct range
     local m = 1
     for i in (N_qubits-1):-1:(1)
         for loop in 1:m
-            SGate!(qc, [i])
-            SGate!(qc, [i])
+            SGate!(qc_plaq, [i])
+            SGate!(qc_plaq, [i])
         end
         m = 2*m
     end
+
+    # initialise to correct eigenstate
+    UGate!(qc_plaq, U, [N_qubits])
 
     # do controlled rotations
     local n = 1
     for i in (N_qubits-1):-1:(1)
         println("Doing i = $i and n = $n")
         for loop in 1:n
-            adiabatic_plaquette_loop!(qc, H, kx, ky, params, [i], [N_qubits], N_link, δk, dt)
+            adiabatic_plaquette_loop!(qc_plaq, H, kx, ky, params, [i], [N_qubits], N_link, δk, dt)
         end
         n = 2*n
     end
 
     # do inverse QFT (switch off representation)
-    invQFT!(qc, 1, N_qubits-1)
+    invQFT!(qc_plaq, 1, N_qubits-1)
 
     # measurement
-    sample_measurement(qc, [i for i in 1:n_prec], N_meas, plot=false, verbose=false, eps=0.000001)
-    phases, probs_max = QPE_get_phase(qc, 3)
+    sample_measurement(qc_plaq, [i for i in 1:n_prec], N_meas, plot=false, verbose=false, eps=0.000001)
+    phases, probs_max = QPE_get_phase(qc_plaq, 10)
 
     # return Berry phase correctly
     #if phases[1] < π
@@ -955,7 +869,7 @@ end
 """ Function to measure the Chern number of a given Hamiltonian by decomposing
 the Brillouin zone into plaquettes and performing an Hadamard test via a
 double adiabatic loop for each plaquette to find the corresponding Berry flux. """
-function measure_Chern_number_adiabatic_loop(H, params, N_link, Nk, dt, N_meas)
+function measure_Chern_number_adiabatic_loop_HT(H, params, N_link, Nk, dt, N_meas)
 
     # Brillouin zone spacing
     δk = 2π/Nk
@@ -973,7 +887,7 @@ function measure_Chern_number_adiabatic_loop(H, params, N_link, Nk, dt, N_meas)
             U = U_list[mod(i, 1:Nk), mod(j, 1:Nk), :, :]
             kx = -π + i*δk
             ky = -π + j*δk
-            Berry_flux[i, j] = Hadamard_test_adiabatic_loop(H, params, U, kx, ky, N_link, δk, dt, N_meas)
+            Berry_flux[i, j] = Berry_flux_adiabatic_loop_HT(H, params, U, kx, ky, N_link, δk, dt, N_meas)
         end
     end
     println("Berry flux: ", Berry_flux)
@@ -1012,6 +926,119 @@ function measure_Chern_number_adiabatic_loop_QPE(H, params, N_link, Nk, dt, N_qu
     # evaluate Chern number
     return real(sum(Berry_flux)/(2π*1.0im))
 end
+
+
+
+######################################
+# Variational ground state preparation
+######################################
+
+# Unfinished functions to set up the ground state preparation (for
+# a 2x2 Bloch Hamiltonian) variationally.
+
+
+""" Function to calculate the expectation value of σx, σy or σz for a
+1-qubit quantum circuit. """
+function get_expectation_value(qc, op, N_meas)
+
+    # rotate to right basis
+    if op == "X"
+        RyGate!(qc, [1], -π/2)
+
+    elseif op == "Y"
+        RxGate!(qc, [1], π/2)
+    end
+    sample_measurement(qc, [1], N_meas, plot=false, verbose=false)
+
+    # evaluate expectation value
+    meas_freqs = collect(values(qc.MeasurementResult))
+    exp_value = (+1)*meas_freqs[1] + (-1)*meas_freqs[2]
+
+    return exp_value
+end
+
+
+""" Function to get the estimated ground state energy of a Bloch Hamiltonian
+of the form H = a*σx + b*σy + c*σz, with three rotation angles to be optimised. """
+function energy_expectation_value_HBloch(params, a, b, c, N_meas; N_qubits=1, backend="MPS_ITensor", maxbond=2)
+
+    # parameters to be optimised
+    θ1 = params[1]
+    θ2 = params[2]
+    θ3 = params[3]
+
+    # save expectation values and loop through circuit
+    exp_vals = []
+    for op in ["X", "Y", "Z"]
+
+        # prepare quantum circuit
+        local qc_var = initialise_qcircuit(N_qubits, backend, maxdim=maxbond)
+        RxGate!(qc_var, [1], θ1)
+        RzGate!(qc_var, [1], θ2)
+        RxGate!(qc_var, [1], θ3)
+
+        # measure each expectation value
+        push!(exp_vals, get_expectation_value(qc, op, N_meas))
+
+    end
+
+    # construct energy estimate
+    E_est = a*exp_vals[1] + b*exp_vals[2] + c*exp_vals[2]
+    return E_est
+end
+
+
+""" Function to variationally minimise the ground state of the momentum
+space QWZ Hamiltonian for each point in the Brillouin zone. """
+function variational_ground_state_prep_QWZ(Nk, u; filled=true)
+
+    # get Brillouin zone
+    δk = 2π/Nk
+    kxs = [-π + i*δk for i in 1:Nk]
+    kys = [-π + i*δk for i in 1:Nk]
+
+    optimised_params = zeros(Nk, Nk, 3)
+
+    # loop through BZ
+    for i in 1:Nk
+        for j in 1:Nk
+
+            # params for H at given point in BZ
+            a = sin(kxs[i])
+            b = sin(kys[j])
+            c = u + cos(kxs[i]) + cos(kys[j])
+
+            # do optimisation
+            initial = [0., 0., 0.]
+            result = optimize(params -> energy_expectation_value_HBloch(params, a, b, c, N_meas), initial, iterations=50000, allow_f_increases=true)
+
+
+        end
+    end
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ###########

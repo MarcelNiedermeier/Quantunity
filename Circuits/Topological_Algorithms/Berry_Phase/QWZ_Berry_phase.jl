@@ -11,7 +11,7 @@ loop executed over k_x). A backend of matrix product states is used.
 """
 
 using ArgParse
-include("../../QuantumSimulator_DEV/QSim.jl")
+include("/scratch/work/niederm1/apps/QuantumSimulator/QSim.jl")
 
 
 # parameters
@@ -68,7 +68,7 @@ n_prec = parsed_args["n_prec"]
 maxdim = parsed_args["maxdim"]
 u = parsed_args["u"]
 ky = parsed_args["ky"]
-
+Nk_ex = 20
 
 # parameter space for QWZ model
 #us = [-3, -1, 1, 3]
