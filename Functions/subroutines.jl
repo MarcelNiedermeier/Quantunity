@@ -536,8 +536,61 @@ function invQFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
     if compact_rep && no_rep==false
         update_block_representation!(qc, pos, num, "-invQFT-", 400)
     end
-
 end
+
+
+""" Apply the inverse QFT to num qubits of the quantum circuit qc, starting
+at position pos. """
+function invQFT!(qc::QC, pos, num; compact_rep=true, no_rep=false)
+
+    # check if size of subregister is compatible with circuit size
+    if (pos+num-1) > qc.NumQubits
+        error("You are trying to apply the transformation between qubits
+        [$(pos), $(pos+num-1)], this however exceeds the number of qubits
+        in the quantum circuit.")
+    end
+
+    # if compact representation desired: suppress representations of gate functions
+    if compact_rep
+        update_rep = false
+    else
+        update_rep = true
+    end
+
+    # Swaps in the beginning
+    for i in (num÷2-1):-1:0
+        #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
+        Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep)
+
+        #println("norm = $(norm(qc.StateVector))")
+
+    end
+
+    # Hadamard gates and hermitian conjugate of controlled rotations
+    for i in num:-1:1
+
+        k = 2
+        for j in pos+i:pos+num-1
+            #println("rotation by -$k for CRn from $j to $(pos+i-1)")
+            CRn!(qc, -k, [j, pos+i-1], update_rep=update_rep)
+            k = k+1
+        end
+
+        # initial code
+        #for j in i+1:pos+num-1
+        #    CRn!(qc, -(j-i+1), [j, i], update_rep)
+        #    #CRn!(qc, -(j-i+1), [j, pos+i-1], update_rep)
+        #end
+
+        Hadamard!(qc, [pos+i-1], update_rep=update_rep)
+    end
+
+    # update compact representation
+    if compact_rep && no_rep==false
+        update_block_representation!(qc, pos, num, "-invQFT-", 400)
+    end
+end
+
 
 
 """ Apply the inverse AQFT to num qubits of the quantum circuit qc, starting

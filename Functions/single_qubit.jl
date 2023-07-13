@@ -62,7 +62,7 @@ end
 
 """ Function to apply the (single-qubit) Hadamard gate to a quantum circuit qc
 in every position specified in the array pos. """
-function Hadamard!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function Hadamard!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -86,7 +86,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli X gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliX!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function PauliX!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -110,7 +110,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli Y gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliY!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function PauliY!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -134,7 +134,7 @@ end
 
 """ Function to apply the (single-qubit) Pauli Z gate to a quantum circuit qc
 in every position specified in the array pos. """
-function PauliZ!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function PauliZ!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -158,7 +158,7 @@ end
 
 """ Function to apply the (single-qubit) √X gate to a quantum circuit qc
 in every position specified in the array pos. """
-function SqrtX!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function SqrtX!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -182,7 +182,7 @@ end
 
 """ Function to apply the (single-qubit) S gate to a quantum circuit qc
 in every position specified in the array pos. """
-function SGate!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function SGate!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -206,7 +206,7 @@ end
 
 """ Function to apply the (single-qubit) T gate to a quantum circuit qc
 in every position specified in the array pos. """
-function TGate!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function TGate!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -231,7 +231,7 @@ end
 """ Function to apply the (single-qubit) Rx gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the x-axis specified by θ."""
-function RXGate!(qc::QC, pos::Array{Int64, 1}, θ::Number, update_rep=true)
+function RXGate!(qc::QC, pos::Array{Int64, 1}, θ::Number; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -256,7 +256,7 @@ end
 """ Function to apply the (single-qubit) Ry gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the x-axis specified by θ."""
-function RYGate!(qc::QC, pos::Array{Int64, 1}, θ::Number, update_rep=true)
+function RYGate!(qc::QC, pos::Array{Int64, 1}, θ::Number; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -281,7 +281,7 @@ end
 """ Function to apply the (single-qubit) Rz gate to a quantum circuit qc
 in every position specified in the array pos. Performs a rotation around
 the x-axis specified by θ."""
-function RZGate!(qc::QC, pos::Array{Int64, 1}, θ::Number, update_rep=true)
+function RZGate!(qc::QC, pos::Array{Int64, 1}, θ::Number; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -305,7 +305,7 @@ end
 
 """ Function to apply a phase shift by the angle θ to a quantum circuit
 qc in every position specified in the array pos. """
-function PhaseShift!(qc::QC, pos::Array{Int64, 1}, θ::Number, update_rep=true)
+function PhaseShift!(qc::QC, pos::Array{Int64, 1}, θ::Number; update_rep=true)
 
    # get matrices
    s = Index(2, "QCircuit")
@@ -350,7 +350,7 @@ end
 """ Function to apply custom-defined unitary operator U to a quantum circuit
 qc in every position specified in the array pos. The matrix is defined as
 U = [α β; γ δ] with the corresponding parameters. """
-function UGate!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
+function UGate!(qc::QC, U, pos::Array{Int64, 1}; update_rep=true)
 
    α = U[1, 1]
    β = U[1, 2]

@@ -322,7 +322,7 @@ pos = [pos[1], pos[2]] = [pos[1], pos[1]+1]. The "upper" qubit (pos[1])
 is the control qubit, the "lower" qubit (pos[2]) the one that is acted
 on. This function serves mostly as an auxiliary function in the more
 general cnot! function, see below. """
-function cnot2!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function cnot2!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    if length(pos) != 2
        error("Incorrect specification of indices (need 2 positions).")
@@ -351,7 +351,7 @@ end
 
 """ Function to swap two adjacent qubits in positions pos = [pos[1], pos[2]]
 = [pos[1], pos[1]+1]. """
-function swap2!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function swap2!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
    # check structure of gate indices
    if length(pos) != 2
@@ -385,7 +385,7 @@ pos = [pos[1], pos[2]] = [pos[1], pos[1]+1], where U is a unitary single-qubit
 gate. The "upper" qubit (pos[1]) is the control qubit, the "lower" qubit
 (pos[2]) the one that is acted on. This function serves mostly as an auxiliary
 function in the more general CU! function, see below. """
-function CU2!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
+function CU2!(qc::QC, U, pos::Array{Int64, 1}; update_rep=true)
 
    # check if always gets two indices!
    if length(pos) != 2
@@ -424,7 +424,7 @@ applied in the quantum Fourier transform. The "upper" qubit (pos[1]) is the
 control qubit, the "lower" qubit (pos[2]) the one that is acted on. This function
 serves mostly as an auxiliary function in the more general CRn! function,
 see below. """
-function CRn2!(qc::QC, n::Number, pos::Array{Int64, 1}, update_rep=true)
+function CRn2!(qc::QC, n::Number, pos::Array{Int64, 1}; update_rep=true)
 
    # check if always gets two indices!
    if length(pos) != 2
@@ -518,7 +518,7 @@ qubit, the second the qubit that is acted on. The control qubit can be
 arrangement. Depending on whether a linear or a master topology is chosen,
 the CNOT gate is either constructed with auxiliary swaps or implemented directly
 as a matrix. """
-function cnot!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function cnot!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
     # check correct format of indices
     if length(pos) != 2
@@ -593,7 +593,7 @@ end
 the swap is decomposed into the corresponding 2-swaps. In the case of a
 master topology, the gate is built from composing three CNOT gates on
 pos, reverse(pos) and pos. """
-function fullSwap!(qc::QC, pos::Array{Int64, 1}, update_rep=true)
+function Swap!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
 
     # check correct format of indices
     if length(pos) != 2
@@ -730,7 +730,7 @@ acted on. The control qubit can be "above" or "below" the action qubit,
 the function implements the desired arrangement. Depending on whether a
 linear or a master topology is chosen, the CRn gate is either constructed
 with auxiliary swaps or implemented directly as a matrix. """
-function CRn!(qc::QC, n::Number, pos::Array{Int64, 1}, update_rep=true)
+function CRn!(qc::QC, n::Number, pos::Array{Int64, 1}; update_rep=true)
 
     # check correct format of indices
     if length(pos) != 2
@@ -806,14 +806,14 @@ acted on. The control qubit can be "above" or "below" the action qubit,
 the function implements the desired arrangement. Depending on whether a
 linear or a master topology is chosen, the CU gate is either constructed
 with auxiliary swaps or implemented directly as a matrix. """
-function C_UGate!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
+function C_UGate!(qc::QC, U, control::Array{Int64, 1}, pos::Array{Int64, 1}; update_rep=true)
 
     # check correct format of indices
-    if length(pos) != 2
-        error("Incorrect specification of indices (need 2 positions).")
-    elseif pos[1] == pos[2]
-        error("Incorrect specification of indices.")
-    end
+    #if length(pos) != 2
+    #    error("Incorrect specification of indices (need 2 positions).")
+    #elseif pos[1] == pos[2]
+    #    error("Incorrect specification of indices.")
+    #end
 
     # apply general CNOT via SWAP gates for linear topology
     if qc.LinearTopology == true
@@ -856,14 +856,14 @@ function C_UGate!(qc::QC, U, pos::Array{Int64, 1}, update_rep=true)
     else
 
         # get matrix representing the general CNOT gate
-        gate = get_controlled_gate(qc, U, pos)
+        gate = get_controlled_gate(qc, U, [control[1], pos[1]])
 
         # update state vector
         qc.StateVector .= gate*qc.StateVector
 
         # update representing matrix of quantum circuit
         if update_rep
-            update_representation_two_site!(qc, pos, 13, true, true)
+            update_representation_two_site!(qc, [control[1], pos[1]], 13, true, true)
         end
 
         # update circuit depth
@@ -1031,7 +1031,7 @@ circuit. Use together with random unitaries to create a highly entangled
 state in the fastest possible way. Can specify the subregister of qubits
 to which the sequential CNOT should be applied by giving the starting
 position pos and the number num of qubits in the subregister. """
-function sequential_cnot!(qc::QC, pos::Number, num::Number, update_rep=false)
+function sequential_cnot!(qc::QC, pos::Number, num::Number; update_rep=false)
 
     # get number of qubits and matrices
     N = qc.NumQubits
