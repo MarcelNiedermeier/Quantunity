@@ -13,7 +13,6 @@
 applied on arbitrary positions given in the array pos as a Kronecker product.
 E.g. specifying X on pos[1, 3] for a 4-qubit system constructs the operator
 X ⊗ E ⊗ X ⊗ E. """
-#function get_gate_single_site(qc::QC, O::Matrix{ComplexF64}, pos::Array{Int64, 1})
 function get_gate_single_site(qc::QC, O::Matrix, pos::Array{Int64, 1})
 
     # get identity
@@ -386,6 +385,35 @@ end
 #################
 # Random Circuits
 #################
+
+
+""" Function to apply a (the same) random unitary single-site gate to a
+quantum circuit in the positions given in the array pos. """
+function RandomU!(qc::QC, pos::Array{Int64, 1}; update_rep=true)
+
+    # get number of qubits and random unitary 2x2 matrix
+    N = qc.NumQubits
+    s = Index(2, "QCircuit")
+    α_rand = 2π * rand()
+    β_rand = 2π * rand()
+    γ_rand = 2π * rand()
+    δ_rand = 2π * rand()
+    U = array(op("RandU", s; α=α_rand, β=β_rand, γ=γ_rand, δ=δ_rand))
+
+    # obtain tensor product operator to act on state vector
+    gate = get_gate_single_site(qc, U, pos)
+
+    # update state vector
+    qc.StateVector .= gate*qc.StateVector
+
+    # update representing matrix of quantum circuit
+    if update_rep
+      update_representation_single_site!(qc, pos, 19)
+    end
+
+    # update circuit depth
+    qc.CircuitDepth += 1
+end
 
 
 """ Function to apply a (different) random unitary single-site gate to a

@@ -8,7 +8,7 @@
 # dependencies on other Julia packages
 ######################################
 
-using ITensors # most important backbone
+using ITensors
 using IterTools
 using StatsBase
 using Random
@@ -22,9 +22,7 @@ using AbstractAlgebra
 using JLD2
 using Plots
 using Statistics
-
-
-
+using SparseArrays
 
 
 
@@ -40,14 +38,10 @@ to the circuit are kept track of in two representation (sorted) dictionaries
 (one just accounting for high-level gates, the other saving information about
 the low-level gates potentially needed to compose a high-level gate). If a
 measurement is performed within the circuit, classical bits of information
-are saved in the corresponding dictionary. Finally, one can choose between
-working with a linear topology (requiring additional swaps for non-adjacent
-2-qubit gates) and a master topology (every qubit connected to every other
-qubit, i.e. 2-site gates can be applied directly through the corresponding
-matrix representation). """
+are saved in the corresponding dictionary. """
 mutable struct QC
 
-    # principle properties
+    # main properties
     StateVector::Vector{ComplexF64}
     NumQubits::Int32
     CircuitDepth::Int32
@@ -64,11 +58,42 @@ mutable struct QC
     ConversionTable::Dict # holds representation of gates
     HasCustomGate::Bool
 
-    # topology
-    LinearTopology::Bool
+end
+
+
+""" Struct defining the basic quantum circuit object that is manipulated.
+Holds information about the exact density matrix, the number of qubits and
+the circuit depth. In addition, the sequences of gates applied
+to the circuit are kept track of in two representation (sorted) dictionaries
+(one just accounting for high-level gates, the other saving information about
+the low-level gates potentially needed to compose a high-level gate). If a
+measurement is performed within the circuit, classical bits of information
+are saved in the corresponding dictionary. It is possible to simulate quantum
+error via 1-qubit depolarisation and amplitude damping and 2-qubit
+depolarisation channels. """
+mutable struct QC_DM
+
+    # main properties
+    StateVector::SparseMatrixCSC{ComplexF64, Int64}
+    NumQubits::Int32
+    CircuitDepth::Int32
+    NumMeasurements::Int32
+
+    # if (single) measurements are performed, save results as classical bits
+    ClassicalBits::SortedDict
+    ClassicalBitsProportion::SortedDict
+    MeasurementResult::Dict
+
+    # keep track of gates in circuit
+    Representation::SortedDict
+    RepresentationFull::SortedDict # including swaps to realise 2-site gates
+    ConversionTable::Dict # holds representation of gates
+    HasCustomGate::Bool
 
     # coherence times of qubits/error rates
-    # other?
+    p_depol1::Float64 # 1-qubit depolarisation
+    p_amp_damp::Float64 # 1-qubit amplitude damping
+    p_depol2::Float64 # 2-qubit depolarisation
 
 end
 
@@ -85,13 +110,10 @@ circuit. In addition, the sequences of gates applied to the circuit are kept
 track of in two representation (sorted) dictionaries (one just accounting for
 high-level gates, the other saving information about the low-level gates potentially
 needed to compose a high-level gate). If a measurement is performed within the
-circuit, classical bits of information are saved in the corresponding dictionary.
-Finally, one can choose between working with a linear topology (requiring
-additional swaps for non-adjacent 2-qubit gates) and a master topology (every
-qubit connected to every other qubit, i.e. 2-site gates can be applied directly. """
+circuit, classical bits of information are saved in the corresponding dictionary. """
 mutable struct QC_IT_MPS
 
-    # principle properties
+    # main properties
     StateVector::MPS
     NumQubits::Int32
     CircuitDepth::Int32
@@ -123,9 +145,6 @@ mutable struct QC_IT_MPS
     RepresentationFull::SortedDict # including swaps to realise 2-site gates
     ConversionTable::Dict # holds representation of gates
     HasCustomGate::Bool
-
-    # topology
-    LinearTopology::Bool
 
     # coherence times of qubits/error rates
     # other?
@@ -166,7 +185,7 @@ end
 """ Function to build the initial state |00...0> of a quantum
 circuit as an exact state vector. Needs the desired number of qubits
 as input. Alternatively, create (normalised) random state. """
-function initialise_state(N, random=false)
+function initialise_state_ED(N, random=false)
 
     if random
         psi = rand(Complex{Float64}, 2^N)
@@ -178,6 +197,21 @@ function initialise_state(N, random=false)
     end
 
     return psi
+end
+
+
+""" Function to initialise the state |00..0⟩ as a density matrix. """
+function initialise_state_DM(N)
+
+    # get matrices
+    s = Index(2, "QCircuit")
+    proj00 = sparse(array(op("Proj00", s)))
+
+    rho0 = proj00
+    for i in 2:N
+        rho0 = kron(rho0, proj00)
+    end
+    return rho0
 end
 
 
@@ -200,19 +234,21 @@ function initialise_custom_gate(qc, N_reg::Int64, gate_name::String)#, backend="
 end
 
 
-""" Function to initialise a quantum circuit object with N qubits. By setting
-the lintop parameter, one may specify a linear topology or a master topology
-of the qubits. The backend parameter determines whether the circuit is built
-from Julia arrays or ITensor MPS objects. """
-function initialise_qcircuit(N, backend="MPS_ITensor"; lintop=false, maxdim=100,
+""" Function to initialise a quantum circuit object with N qubits. The backend
+parameter determines whether the circuit is simulated exactly or approximately:
+- "ED_Julia" -> exact statevector simulation
+- "DM_Julia" -> density matrix simulation
+- "MPS_ITensor" -> MPS simulation.
+Further parameters can be set for the MPS simulation. The initial state is
+conventionally set to |00...0⟩; for ED and MPS, a random initial state can
+be set, too. """
+function initialise_qcircuit(N, backend="MPS_ITensor"; maxdim=100,
     contmethod="naive", random=false, randombond=16)
 
     # check inputs
     if typeof(N) != Int
         error("Wrong data type for number of qubits (must be Int). ")
-    elseif typeof(lintop) != Bool
-        error("Wrong data type for lintop parameter (need Bool). ")
-    elseif backend ∉ ["ED_Julia", "MPS_ITensor"]
+    elseif backend ∉ ["ED_Julia", "MPS_ITensor", "DM_Julia"]
         error("Incorrect backend (needs ED_Julia or MPS_ITensor). ")
     elseif typeof(maxdim) != Int
         error("Wrong data type for maximal bond dimension (must be Int). ")
@@ -222,10 +258,20 @@ function initialise_qcircuit(N, backend="MPS_ITensor"; lintop=false, maxdim=100,
 
     # initialise state vector and construct circuit object, depending on backend
     if backend == "ED_Julia"
-        psi = initialise_state(N, random)
+        psi = initialise_state_ED(N, random)
         qcircuit = QC(psi, N, 0, 100, SortedDict(), SortedDict(), Dict(), SortedDict(), SortedDict(),
-        Dict(), false, lintop)
-    else
+        Dict(), false)
+
+    elseif backend == "DM_Julia"
+        if random
+            println("Random initial state for density matrix not implemented.")
+            return
+        else
+            psi = initialise_state_DM(N)
+            qcircuit = QC_DM(psi, N, 0, 100, SortedDict(), SortedDict(), Dict(), SortedDict(), SortedDict(),
+            Dict(), false, 0., 0., 0.)
+        end
+    else # backend == "MPS_ITensor"
         sites = siteinds("QCircuit", N)
         if random
             psi = randomMPS(sites, linkdims=randombond)
@@ -234,7 +280,7 @@ function initialise_qcircuit(N, backend="MPS_ITensor"; lintop=false, maxdim=100,
         end
         qcircuit = QC_IT_MPS(psi, N, 0, 100, sites, maxdim, [maxlinkdim(psi)], contmethod, [],
         [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], SortedDict(), SortedDict(),
-        Dict(), SortedDict(), SortedDict(), Dict(), false, lintop)
+        Dict(), SortedDict(), SortedDict(), Dict(), false)
     end
 
     # set up representation of circuit
@@ -285,12 +331,174 @@ function initialise_qcircuit(N, backend="MPS_ITensor"; lintop=false, maxdim=100,
 end
 
 
+""" Function to initialise a quantum circuit object with N qubits in a given
+initial state psi. The backend parameter determines whether the circuit is
+simulated exactly or approximately:
+- "ED_Julia" -> exact statevector simulation
+- "DM_Julia" -> density matrix simulation
+- "MPS_ITensor" -> MPS simulation.
+Further parameters can be set for the MPS simulation. The initial state is
+conventionally set to |00...0⟩; for ED and MPS, a random initial state can
+be set, too. """
+function initialise_qcircuit_state(N, psi, backend="MPS_ITensor"; maxdim=100,
+    contmethod="naive", randombond=16)
+
+    # check inputs
+    if typeof(N) != Int
+        error("Wrong data type for number of qubits (must be Int). ")
+    elseif backend ∉ ["ED_Julia", "MPS_ITensor", "DM_Julia"]
+        error("Incorrect backend (needs ED_Julia, DM_Julia or MPS_ITensor). ")
+    elseif typeof(maxdim) != Int
+        error("Wrong data type for maximal bond dimension (must be Int). ")
+    elseif typeof(contmethod) != String
+        error("Wrong data type for MPS-MPO contraction method (must be String). ")
+    end
+
+    # initialise state vector and construct circuit object, depending on backend
+    if backend == "ED_Julia"
+        if real(norm(psi))-1 > 1e-10
+            error("The input state may not be normalised (up to 1e-10), check.")
+        end
+        qcircuit = QC(psi, N, 0, 100, SortedDict(), SortedDict(), Dict(), SortedDict(), SortedDict(),
+        Dict(), false)
+    elseif backend == "DM_Julia"
+        if real(LinearAlgebra.tr(psi))-1 > 1e-10
+            error("The input state may not be normalised (up to 1e-10), check.")
+        end
+        qcircuit = QC_DM(psi, N, 0, 100, SortedDict(), SortedDict(), Dict(), SortedDict(), SortedDict(),
+        Dict(), false, 0., 0., 0.)
+    else # backend == "MPS_ITensor"
+        if real(ITensors.norm(psi))-1 > 1e-10
+            error("The input state may not be normalised (up to 1e-10), check.")
+        end
+        qcircuit = QC_IT_MPS(psi, N, 0, 100, siteinds(psi), maxdim, [maxlinkdim(psi)], contmethod, [],
+        [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [1.0], SortedDict(), SortedDict(),
+        Dict(), SortedDict(), SortedDict(), Dict(), false)
+    end
+
+    # set up representation of circuit
+    for i in 1:N
+        qcircuit.Representation[i] = []
+        qcircuit.RepresentationFull[i] = []
+    end
+
+    # initialise conversion table to print out gates
+    qcircuit.ConversionTable[0] = "----"
+    qcircuit.ConversionTable[1] = "-H--"
+    qcircuit.ConversionTable[2] = "-X--"
+    qcircuit.ConversionTable[3] = "-ο--"
+    qcircuit.ConversionTable[-3] = "-⊕--" # ⊕ , +
+    qcircuit.ConversionTable[4] = "-⊗--"
+    qcircuit.ConversionTable[-4] = "-⊗--"
+    qcircuit.ConversionTable[5] = "-Z--"
+    qcircuit.ConversionTable[6] = "-Y--"
+    qcircuit.ConversionTable[7] = "-S--"
+    qcircuit.ConversionTable[8] = "-T--"
+    qcircuit.ConversionTable[9] = "-Rˣ-"
+    qcircuit.ConversionTable[10] = "-Rʸ-"
+    qcircuit.ConversionTable[11] = "-Rᶻ-"
+    qcircuit.ConversionTable[12] = "-P--"
+    qcircuit.ConversionTable[13] = "-ο--" #  ○
+    qcircuit.ConversionTable[-13] = "-U--"
+    qcircuit.ConversionTable[14] = "-ο--"
+    qcircuit.ConversionTable[-14] = "-⊕--"
+    qcircuit.ConversionTable[15] = "-|--"
+    qcircuit.ConversionTable[16] = "-M--"
+    qcircuit.ConversionTable[17] = "---M"
+    qcircuit.ConversionTable[18] = "-√X-"
+    qcircuit.ConversionTable[19] = "-U--"
+    qcircuit.ConversionTable[20] = "-|  "
+    qcircuit.ConversionTable[21] = " |--"
+    qcircuit.ConversionTable[22] = "-+++"
+    qcircuit.ConversionTable[23] = "++--"
+    #qcircuit.ConversionTable[24] = "-ο--"
+    qcircuit.ConversionTable[24] = "-Rn-"
+    qcircuit.ConversionTable[25] = "-U--"
+    qcircuit.ConversionTable[-25] = "-U--"
+    qcircuit.ConversionTable[26] = "√⊗--"
+    qcircuit.ConversionTable[-26] = "√⊗--"
+    qcircuit.ConversionTable[27] = "⊗^β-"
+    qcircuit.ConversionTable[-27] = "⊗^β-"
+
+    return qcircuit
+end
+
+
+""" Function to set the gate errors in a density matrix based simulation. """
+function set_gate_errors!(qc::QC_DM; p_amp_damp=0., p_depol1=0., p_depol2=0.)
+    qc.p_amp_damp = p_amp_damp
+    qc.p_depol1 = p_depol1
+    qc.p_depol2 = p_depol2
+end
+
+
 """ Function that takes in the meta-information about the quantum
 circuit (after it has been constructed) and prints out a (very) schematic
 representation in the console. Works for the different backends, as only the
 metainformation about the circuit is needed is draw it on the terminal.
 TO DO: maybe extend to be (pretty-) printed into a file, see matplotlib. """
 function draw(qc::QC, full=false)
+
+    # prompt for file name if desired to save in txt file!
+
+    # set maximum length of terminal up to which the circuit can be printed
+    maxprintlength = 34
+
+    # check desired printing format
+    if full
+        qc_rep = qc.RepresentationFull
+        println("Schematic representation of full quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
+        if length(collect(values(qc_rep))[1]) > maxprintlength
+            println("Circuit too long to be printed in terminal!")
+            println("Cutting after $maxprintlength gates.")
+        end
+    else
+        qc_rep = qc.Representation
+        println("Schematic representation of quantum circuit: ")#, depth = $(qc.CircuitDepth): ")
+        if length(collect(values(qc_rep))[1]) > maxprintlength
+            println("Circuit too long to be printed in terminal!")
+            println("Cutting after $maxprintlength gates.")
+        end
+    end
+
+    # loop through gate matrix and look up corresponding representation
+    println(" ")
+    for (qubit, gates) in qc_rep
+        if qubit < 10
+            print(qubit, "   |0⟩ ")
+        elseif qubit >= 10 && qubit < 100
+            print(qubit, "  |0⟩ ")
+        else
+            print(qubit, " |0⟩ ")
+        end
+        if length(gates) < maxprintlength
+            for i in 1:length(gates)
+                if i == length(gates)
+                    println(qc.ConversionTable[gates[i]])
+                else
+                    print(qc.ConversionTable[gates[i]])
+                end
+            end
+        else
+            for i in 1:maxprintlength
+                if i == maxprintlength
+                    println(qc.ConversionTable[gates[i]])
+                else
+                    print(qc.ConversionTable[gates[i]])
+                end
+            end
+        end
+    end
+    println("\n")
+end
+
+
+""" Function that takes in the meta-information about the quantum
+circuit (after it has been constructed) and prints out a (very) schematic
+representation in the console. Works for the different backends, as only the
+metainformation about the circuit is needed is draw it on the terminal.
+TO DO: maybe extend to be (pretty-) printed into a file, see matplotlib. """
+function draw(qc::QC_DM, full=false)
 
     # prompt for file name if desired to save in txt file!
 
@@ -555,6 +763,72 @@ function MPS_computationalBasis(sites, configuration::Array)
 end
 
 
+""" Function to construct the an initial state for a quantum circuit as a
+superposition of MPS, given the decimal numbers describing the states. """
+function initial_state_arbitrary_superposition(states, q, backend="MPS_ITensor")
+
+    if backend ∉ ["ED_Julia", "MPS_ITensor", "DM_Julia"]
+        error("Incorrect backend (needs ED_Julia, DM_Julia or MPS_ITensor). ")
+    end
+
+    if backend == "MPS_ITensor"
+
+        # initialise first state
+        MPS_state = string.(reverse(digits(states[1], base=2, pad=q)))
+        sites = siteinds("QCircuit", q)
+        psi = MPS(sites, MPS_state)
+
+        # construct other states in superposition
+        for i in 2:length(states)
+            if mod(i, 10) == 0
+                println("including state $i")
+            end
+            MPS_state_new = string.(reverse(digits(states[i], base=2, pad=q)))
+            psi = +(psi, MPS(sites, MPS_state_new); cutoff=1e-10)
+        end
+        return 1/sqrt(length(states))*psi
+
+    elseif backend == "ED_Julia"
+
+        # initialise first state
+        psi = Complex.(zeros(2^q))
+        psi[states[1]+1] = 1.
+
+        # construct other states in superposition
+        for i in 2:length(states)
+            if mod(i, 10) == 0
+                println("including state $i")
+            end
+            psi_new = Complex.(zeros(2^q))
+            psi_new[states[i]+1] = 1.
+            psi += psi_new
+        end
+        return 1/sqrt(length(states))*psi
+
+    else # backend == "DM_Julia"
+
+        # initialise first state
+        psi = Complex.(zeros(2^q))
+        psi[states[1]+1] = 1.
+        #rho0 = psi*psi'
+
+        # construct other states in superposition
+        for i in 2:length(states)
+            if mod(i, 10) == 0
+                println("including state $i")
+            end
+            psi_new = Complex.(zeros(2^q))
+            psi_new[states[i]+1] = 1.
+            psi += psi_new
+            #rho0_new = psi_new*psi_new'
+            #rho0 += rho0_new
+        end
+        rho0 = psi*psi'
+        return rho0/LinearAlgebra.tr(rho0)
+    end
+end
+
+
 #######################################
 # Basic plotting of measurement results
 #######################################
@@ -797,13 +1071,17 @@ include("measurement.jl")
 ####################
 
 include("Functions/single_qubit.jl")
+include("Functions/single_qubit_DM.jl")
 include("Functions/single_qubit_MPS.jl")
+
 
 ###################
 # Multi-qubit gates
 ###################
 
 # multiply-controlled single- and multi-qubit gates
+include("Functions/multi_qubit.jl")
+include("Functions/multi_qubit_DM.jl")
 include("Functions/multi_qubit_MPS.jl")
 
 
@@ -812,8 +1090,7 @@ include("Functions/multi_qubit_MPS.jl")
 #################
 
 # probably soon to be deprecated
-include("Functions/two_qubit.jl")
-#include("Functions/two_qubit_MPS.jl")
+#include("Functions/two_qubit.jl")
 
 
 ###################
@@ -821,8 +1098,7 @@ include("Functions/two_qubit.jl")
 ###################
 
 # probably soon to be deprecated
-include("Functions/three_qubit.jl")
-#include("Functions/three_qubit_MPS.jl")
+#include("Functions/three_qubit.jl")
 
 
 ############################
@@ -831,6 +1107,7 @@ include("Functions/three_qubit.jl")
 
 # general functions constructing multi-qubit gates
 include("Functions/arbitrary_CU.jl")
+include("Functions/arbitrary_CU_DM.jl")
 include("Functions/arbitrary_CU_MPS.jl")
 
 

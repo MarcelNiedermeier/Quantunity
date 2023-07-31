@@ -226,7 +226,7 @@ end
 
 """ Function to apply a layer of CNOT gates on neighbouring qubit lines
 to a quantum circuit. Can indicate the starting position. """
-function cnot_layer!(qc, start_pos, end_pos; update_rep=false, recordEE=true,
+function cnot_layer!(qc::QC_IT_MPS, start_pos, end_pos; update_rep=false, recordEE=true,
     α=α, cutoff=cutoff)
     for i in start_pos:2:(end_pos-1)
         Cnot!(qc, [i, i+1], update_rep=update_rep, recordEE=recordEE,
@@ -235,12 +235,21 @@ function cnot_layer!(qc, start_pos, end_pos; update_rep=false, recordEE=true,
 end
 
 
+""" Function to apply a layer of CNOT gates on neighbouring qubit lines
+to a quantum circuit. Can indicate the starting position. """
+function Cnot_layer!(qc::Union{QC,QC_DM}, start_pos, end_pos; update_rep=false)
+    for i in start_pos:2:(end_pos-1)
+        Cnot!(qc, [i, i+1], update_rep=update_rep)
+    end
+end
+
+
 """ Function to apply a sequence of gates generating a random quantum
 state to the circuit qc, starting at position pos and covering a number
-num of qubits. The sequence is of depth D. Every four layers of gates,
-the state vector is renormalised. By default, the representation is changed
-to a "block". """
-function randomCircuit!(qc, pos, num, D; compact_rep=true, recordEE=false,
+num of qubits. The sequence is of depth D, counting the number of 2-qubit
+gates. Every four layers of gates, the state vector is renormalised. By
+default, the representation is changed to a "block". """
+function randomCircuit!(qc::QC_IT_MPS, pos, num, D; compact_rep=true, recordEE=false,
     α=1, cutoff=1E-3)
 
     # check if size of subregister is compatible with circuit size
@@ -258,13 +267,10 @@ function randomCircuit!(qc, pos, num, D; compact_rep=true, recordEE=false,
     end
 
     # build random circuit
-    for j in 1:(D÷2)
+    for j in 1:D
 
         # apply random unitaries to each site
         random_single_site_gates!(qc, [i for i in pos:pos+num-1], update_rep=update_rep)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc))
-        #end
 
         # apply vertically stacked CNOT gates
         if isodd(j)
@@ -274,15 +280,54 @@ function randomCircuit!(qc, pos, num, D; compact_rep=true, recordEE=false,
             cnot_layer!(qc, pos+1, pos+num-1, update_rep=update_rep,
                 recordEE=recordEE, α=α, cutoff=cutoff)
         end
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     if compact_rep
         update_block_representation!(qc, pos, num, "-RANDOM-", 200)
     end
+end
 
+
+""" Function to apply a sequence of gates generating a random quantum
+state to the circuit qc, starting at position pos and covering a number
+num of qubits. The sequence is of depth D, counting the number of 2-qubit
+gates. By default, the representation is changed to a "block". """
+function randomCircuit!(qc::Union{QC,QC_DM}, pos, num, D; compact_rep=true)
+
+    # check if size of subregister is compatible with circuit size
+    if (pos+num-1) > qc.NumQubits
+        error("You are trying to apply the transformation between qubits
+        [$(pos), $(pos+num-1)], this however exceeds the number of qubits
+        in the quantum circuit.")
+    end
+
+    # set representation updates to false if compact rep desired
+    if compact_rep
+        update_rep = false
+    else
+        update_rep = true
+    end
+
+    # build random circuit
+    for j in 1:D
+
+        # apply random unitaries to each site
+        #random_single_site_gates!(qc, [i for i in pos:pos+num-1], update_rep=update_rep)
+        for i in [i for i in pos:pos+num-1]
+            RandomU!(qc, [i], update_rep=update_rep)
+        end
+
+        # apply vertically stacked CNOT gates
+        if isodd(j)
+            Cnot_layer!(qc, pos, pos+num-1, update_rep=update_rep)
+        else
+            Cnot_layer!(qc, pos+1, pos+num-1, update_rep=update_rep)
+        end
+    end
+
+    if compact_rep
+        update_block_representation!(qc, pos, num, "-RANDOM-", 200)
+    end
 end
 
 
@@ -353,7 +398,51 @@ end
 
 """ Apply the QFT to num qubits of the quantum circuit qc, starting at
 position pos. """
-function QFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
+function QFT!(qc::Union{QC,QC_DM}, pos, num; compact_rep=true, no_rep=false)
+
+    # check if size of subregister is compatible with circuit size
+    if (pos+num-1) > qc.NumQubits
+        error("You are trying to apply the transformation between qubits
+        [$(pos), $(pos+num-1)], this however exceeds the number of qubits
+        in the quantum circuit.")
+    end
+
+    # if compact representation desired: suppress representations of gate functions
+    if compact_rep
+        update_rep = false
+    else
+        update_rep = true
+    end
+
+    # Hadamard gates and controlled rotations
+    for i in 1:num
+        Hadamard!(qc, [pos+i-1], update_rep=update_rep)
+
+        k = 0
+        for j in pos+num-i:-1:pos+1
+            #println("rotation by $(j-pos+1) for CRn from $(pos+num-1-k) to $(pos+i-1)")
+            CRn!(qc, (j-pos+1), [pos+num-1-k, pos+i-1], update_rep=update_rep)
+            k = k+1
+        end
+    end
+
+    # Swaps in the end
+    for i in 0:(num÷2-1)
+        #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
+        Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep)
+    end
+
+    # update compact representation
+    if compact_rep && no_rep==false
+        update_block_representation!(qc, pos, num, "-+QFT+--", 300)
+    end
+
+end
+
+
+""" Apply the QFT to num qubits of the quantum circuit qc, starting at
+position pos. """
+function QFT!(qc::QC_IT_MPS, pos, num; compact_rep=true, no_rep=false, recordEE=false,
     α=1, cutoff=1E-3)
 
     # check if size of subregister is compatible with circuit size
@@ -379,12 +468,6 @@ function QFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
             #println("rotation by $(j-pos+1) for CRn from $(pos+num-1-k) to $(pos+i-1)")
             CRn!(qc, (j-pos+1), [pos+num-1-k, pos+i-1], update_rep=update_rep,
                 recordEE=recordEE, α=α, cutoff=cutoff)
-
-            # record entanglement entropy
-            #if recordEE
-            #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-            #end
-
             k = k+1
         end
     end
@@ -394,13 +477,6 @@ function QFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
         #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
         Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-
-        #println("norm = $(norm(qc.StateVector))")
-
-        # record entanglement entropy
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # update compact representation
@@ -415,7 +491,57 @@ end
 position pos. m is the cutoff parameter: only controlled rotations up
 to R_m will be applied (therefore needs to be smaller than subregister
 size). """
-function AQFT!(qc, m, pos, num; compact_rep=true, no_rep=false, recordEE=false,
+function AQFT!(qc::Union{QC,QC_DM}, m, pos, num; compact_rep=true, no_rep=false)
+
+    # check if size of subregister is compatible with circuit size
+    if (pos+num-1) > qc.NumQubits
+        error("You are trying to apply the transformation between qubits
+        [$(pos), $(pos+num-1)], this however exceeds the number of qubits
+        in the quantum circuit.")
+    elseif m > num
+        error("Incorrect choice for parameter m (needs to be smaller
+        than subregister size).)")
+    end
+
+    # if compact representation desired: suppress representations of gate functions
+    if compact_rep
+        update_rep = false
+    else
+        update_rep = true
+    end
+
+    # Hadamard gates and controlled rotations
+    for i in 1:num
+        Hadamard!(qc, [pos+i-1], update_rep=update_rep)
+        k = 0
+        for j in pos+num-i:-1:pos+1
+            #println("rotation by $(j-pos+1) for CRn from $(pos+num-1-k) to $(pos+i-1)")
+            if (j-pos+1)  <= m
+                #println("rotation by $(j-pos+1) for CRn from $(pos+num-1-k) to $(pos+i-1)")
+                CRn!(qc, (j-pos+1), [pos+num-1-k, pos+i-1], update_rep=update_rep)
+            end
+            k = k+1
+        end
+    end
+
+    # Swaps in the end
+    for i in 0:(num÷2-1)
+        #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
+        Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep)
+    end
+
+    # update compact representation
+    if compact_rep && no_rep==false
+        update_block_representation!(qc, pos, num, "-AQFT+--", 300)
+    end
+end
+
+
+""" Apply the AQFT to num qubits of the quantum circuit qc, starting at
+position pos. m is the cutoff parameter: only controlled rotations up
+to R_m will be applied (therefore needs to be smaller than subregister
+size). """
+function AQFT!(qc::QC_IT_MPS, m, pos, num; compact_rep=true, no_rep=false, recordEE=false,
     α=1, cutoff=1E-3)
 
     # check if size of subregister is compatible with circuit size
@@ -445,9 +571,6 @@ function AQFT!(qc, m, pos, num; compact_rep=true, no_rep=false, recordEE=false,
                 #println("rotation by $(j-pos+1) for CRn from $(pos+num-1-k) to $(pos+i-1)")
                 CRn!(qc, (j-pos+1), [pos+num-1-k, pos+i-1], update_rep=update_rep,
                     recordEE=recordEE, α=α, cutoff=cutoff)
-                #if recordEE
-                #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-                #end
             end
             k = k+1
         end
@@ -458,24 +581,18 @@ function AQFT!(qc, m, pos, num; compact_rep=true, no_rep=false, recordEE=false,
         #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
         Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-
-        #println("norm = $(norm(qc.StateVector))")
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # update compact representation
     if compact_rep && no_rep==false
         update_block_representation!(qc, pos, num, "-AQFT+--", 300)
     end
-
 end
 
 
 """ Apply the inverse QFT to num qubits of the quantum circuit qc, starting
 at position pos. """
-function invQFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
+function invQFT!(qc::QC_IT_MPS, pos, num; compact_rep=true, no_rep=false, recordEE=false,
     α=1, cutoff=1E-3)
 
     # check if size of subregister is compatible with circuit size
@@ -497,13 +614,6 @@ function invQFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
         #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
         Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-
-        #println("norm = $(norm(qc.StateVector))")
-
-        # record entanglement entropy
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # Hadamard gates and hermitian conjugate of controlled rotations
@@ -514,12 +624,6 @@ function invQFT!(qc, pos, num; compact_rep=true, no_rep=false, recordEE=false,
             #println("rotation by -$k for CRn from $j to $(pos+i-1)")
             CRn!(qc, -k, [j, pos+i-1], update_rep=update_rep,
                 recordEE=recordEE, α=α, cutoff=cutoff)
-
-            # record entanglement entropy
-            #if recordEE
-            #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-            #end
-
             k = k+1
         end
 
@@ -541,7 +645,7 @@ end
 
 """ Apply the inverse QFT to num qubits of the quantum circuit qc, starting
 at position pos. """
-function invQFT!(qc::QC, pos, num; compact_rep=true, no_rep=false)
+function invQFT!(qc::Union{QC,QC_DM}, pos, num; compact_rep=true, no_rep=false)
 
     # check if size of subregister is compatible with circuit size
     if (pos+num-1) > qc.NumQubits
@@ -561,9 +665,6 @@ function invQFT!(qc::QC, pos, num; compact_rep=true, no_rep=false)
     for i in (num÷2-1):-1:0
         #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
         Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep)
-
-        #println("norm = $(norm(qc.StateVector))")
-
     end
 
     # Hadamard gates and hermitian conjugate of controlled rotations
@@ -592,12 +693,62 @@ function invQFT!(qc::QC, pos, num; compact_rep=true, no_rep=false)
 end
 
 
+""" Apply the inverse AQFT to num qubits of the quantum circuit qc, starting
+at position pos. m is the cutoff parameter: only controlled rotations up
+to R_m will be applied (therefore needs to be smaller than subregister
+size)."""
+function invAQFT!(qc::Union{QC,QC_DM}, m, pos, num; compact_rep=true, no_rep=false)
+
+    # check if size of subregister is compatible with circuit size
+    if (pos+num-1) > qc.NumQubits
+        error("You are trying to apply the transformation between qubits
+        [$(pos), $(pos+num-1)], this however exceeds the number of qubits
+        in the quantum circuit.")
+    elseif m > num
+        error("Incorrect choice for parameter m (needs to be smaller
+        than subregister size).)")
+    end
+
+    # if compact representation desired: suppress representations of gate functions
+    if compact_rep
+        update_rep = false
+    else
+        update_rep = true
+    end
+
+    # Swaps in the beginning
+    for i in (num÷2-1):-1:0
+        #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
+        Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep)
+    end
+
+    # Hadamard gates and hermitian conjugate of controlled rotations
+    for i in num:-1:1
+
+        k = 2
+        for j in pos+i:pos+num-1
+            #println("rotation by -$k for CRn from $j to $(pos+i-1)")
+            if k  <= m
+                CRn!(qc, -k, [j, pos+i-1], update_rep=update_rep)
+            end
+            k = k+1
+        end
+
+        Hadamard!(qc, [pos+i-1], update_rep=update_rep)
+    end
+
+    # update compact representation
+    if compact_rep && no_rep==false
+        update_block_representation!(qc, pos, num, "-inAQFT-", 400)
+    end
+end
+
 
 """ Apply the inverse AQFT to num qubits of the quantum circuit qc, starting
 at position pos. m is the cutoff parameter: only controlled rotations up
 to R_m will be applied (therefore needs to be smaller than subregister
 size)."""
-function invAQFT!(qc, m, pos, num; compact_rep=true, no_rep=false,
+function invAQFT!(qc::QC_IT_MPS, m, pos, num; compact_rep=true, no_rep=false,
     recordEE=false, α=1, cutoff=1E-3)
 
     # check if size of subregister is compatible with circuit size
@@ -622,9 +773,6 @@ function invAQFT!(qc, m, pos, num; compact_rep=true, no_rep=false,
         #fullSwap!(qc, [pos+i, pos+num-1-i], update_rep)
         Swap!(qc, [pos+i, pos+num-1-i], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # Hadamard gates and hermitian conjugate of controlled rotations
@@ -636,9 +784,6 @@ function invAQFT!(qc, m, pos, num; compact_rep=true, no_rep=false,
             if k  <= m
                 CRn!(qc, -k, [j, pos+i-1], update_rep=update_rep,
                     recordEE=recordEE, α=α, cutoff=cutoff)
-                #if recordEE
-                #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-                #end
             end
             k = k+1
         end
@@ -650,7 +795,6 @@ function invAQFT!(qc, m, pos, num; compact_rep=true, no_rep=false,
     if compact_rep && no_rep==false
         update_block_representation!(qc, pos, num, "-inAQFT-", 400)
     end
-
 end
 
 
@@ -873,11 +1017,6 @@ num_qubits qubits. """
 function Grover_diffusor!(qc, start_pos, num_qubits; recordEE=false,
     compact_rep=false, α=1, cutoff=1E-3)
 
-    # check if number of available control qubits not exceeded
-    #if num_qubits-1 > 20
-    #    error("Number of currently available control exceeded!")
-    #end
-
     # if compact representation desired: suppress representations of gate functions
     if compact_rep
         update_rep = false
@@ -898,9 +1037,6 @@ function Grover_diffusor!(qc, start_pos, num_qubits; recordEE=false,
     control_register = [i for i in start_pos:(start_pos+num_qubits-2)]
     C_PauliZ!(qc, control_register, action_qubits, update_rep=update_rep,
         recordEE=recordEE, α=α, cutoff=cutoff)
-    #if recordEE
-    #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-    #end
 
     PauliX!(qc, register, update_rep=update_rep)
 
@@ -921,10 +1057,6 @@ num_qubits qubits. It is controlled by an additional qubit. """
 function C_Grover_diffusor!(qc, control_qubit, start_pos,
     num_qubits; compact_rep=false, recordEE=false, α=1, cutoff=1E-3)
 
-    # check if number of available control qubits not exceeded
-    #if num_qubits-1 > 20
-    #    error("Number of currently available control exceeded!")
-    #elseif length(control_qubit) > 1
     if length(control_qubit) > 1
         error("Too many control qubits given (only one).")
     end
@@ -943,18 +1075,12 @@ function C_Grover_diffusor!(qc, control_qubit, start_pos,
     for i in 1:length(register)
         C_Hadamard!(qc, control_qubit, [register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # 2|0⟩⟨0| - I
     for i in 1:length(register)
         C_PauliX!(qc, control_qubit, [register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     action_qubits = [start_pos+num_qubits-1]
@@ -964,25 +1090,16 @@ function C_Grover_diffusor!(qc, control_qubit, start_pos,
     end
     C_PauliZ!(qc, control_register, action_qubits, update_rep=update_rep,
         recordEE=recordEE, α=α, cutoff=cutoff)
-    #if recordEE
-    #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-    #end
 
     for i in 1:length(register)
         C_PauliX!(qc, control_qubit, [register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     # wrap in Hadamards
     for i in 1:length(register)
         C_Hadamard!(qc, control_qubit, [register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
 end
@@ -1023,9 +1140,6 @@ function phase_oracle_single!(qc, marked_element, start_pos; recordEE=false,
     action_qubits = [start_pos+num_qubits-1]
     C_PauliZ!(qc, control_register, action_qubits, update_rep=update_rep,
         recordEE=recordEE, α=α, cutoff=cutoff)
-    #if recordEE
-    #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-    #end
 
     PauliX!(qc, Pauli_register, update_rep=update_rep)
 
@@ -1069,9 +1183,6 @@ function C_phase_oracle_single!(qc, control_qubit, marked_element,
     for i in 1:length(Pauli_register)
         C_PauliX!(qc, control_qubit, [Pauli_register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 
     action_qubits = [start_pos+num_qubits-1]
@@ -1081,17 +1192,11 @@ function C_phase_oracle_single!(qc, control_qubit, marked_element,
     end
     C_PauliZ!(qc, control_register, action_qubits, update_rep=update_rep,
         recordEE=recordEE, α=α, cutoff=cutoff)
-    #if recordEE
-    #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-    #end
 
     #PauliX!(qc, Pauli_register)
     for i in 1:length(Pauli_register)
         C_PauliX!(qc, control_qubit, [Pauli_register[i]], update_rep=update_rep,
             recordEE=recordEE, α=α, cutoff=cutoff)
-        #if recordEE
-        #    push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
-        #end
     end
 end
 
@@ -1141,13 +1246,10 @@ function Grover_operator!(qc, marked_elements, start_pos; recordEE=false,
     Grover_diffusor!(qc, start_pos, num_qubits, recordEE=recordEE,
         compact_rep=compact_rep, α=α, cutoff=cutoff)
 
-
     # update compact representation
     #if compact_rep
     #    update_block_representation!(qc, pos, num_qubits, "-Grover-", 800)
     #end
-
-
 end
 
 
@@ -1169,8 +1271,123 @@ function C_Grover_operator!(qc, control_qubit, marked_elements, start_pos;
     num_qubits = length(marked_elements[1])
     C_Grover_diffusor!(qc, control_qubit, start_pos, num_qubits,
         recordEE=recordEE, compact_rep=compact_rep, α=α, cutoff=cutoff)
+end
 
 
+##################
+# Shor's Algorithm
+##################
+
+
+""" Function to find how many qubits are required to factorise the number
+N with Short algorithm (in the upper register, twice the number of binary
+digits). """
+function qubits_needed(N)
+    q = 0
+    for i in 1:100
+        if N^2 <= 2^i && 2^i <= 2*N^2
+            #println("you need $i qubits")
+            q = i
+        end
+    end
+    println("You need $q qubits: N² = $(N^2), 2^q = $(2^q), 2N² = $(2*N^2), number states ≈ $(2^q/N)")
+    return q
+end
+
+
+""" Function to find the order r of x mod N (x^r mod N = 1). """
+function find_order(x, N)
+
+    # numbers not co-prime
+    if gcd(BigInt(x), N) != 1
+        return 0
+    end
+    for i in 1:N
+        if mod(BigInt(x)^i, N) == 1
+            return i
+        end
+    end
+end
+
+
+""" Function to find the largest order for some x < N (returns all
+values of x which have the largest order). """
+function find_largest_order(N)
+    orders = zeros(N)
+    xs = [i for i in 1:N]
+    for x in xs
+        orders[x] = find_order(x, N)
+    end
+    max_order = maximum(orders)
+    x_max = findall(x->x==max_order, orders)
+    return x_max, max_order
+end
+
+
+""" Function to find all the states (as decimal numbers) which occur
+in a superposition in the upper register in Shor's algorithm, for a
+given N, x, order and value of a to collapse the lower register. """
+function find_upper_register(q, x, N, a, max_order)
+
+    #chosen_a = rand(0:2^(q)-1)
+    chosen_a = a
+    #println("chosen a ", chosen_a)
+    z = mod(BigInt(x)^chosen_a, BigInt(N))
+    println("measured z = $z")
+    a_vals_temp = []
+    for a in 0:2^(2*q)-1
+        #println("a = $a")
+        if mod(BigInt(x)^a, BigInt(N)) == z
+            push!(a_vals_temp, a)
+        end
+        if length(a_vals_temp) == 3
+            break
+        end
+    end
+    #println(a_vals_temp)
+    l = a_vals_temp[1]
+    r = a_vals_temp[2] - a_vals_temp[1]
+    #println("l = $l")
+    #println("r = $r")
+
+    a_vals = []
+    A = ceil(2^q/max_order)+1
+    #println("A = $A")
+    for j in 0:A
+        if l+j*r <= (2^q)-1
+            push!(a_vals, Int64(l+j*r))
+        end
+    end
+    return a_vals
+end
+
+
+""" Function to prepare the state of the upper register in Shor's algorithm
+(after the controlled operations) as an MPS, given that the lower register has
+collapsed it into a specific superposition (set by giving a value of a). It
+is automatically assumed that for a given N, a value of x is chosen such that
+the order of x is maximal (and therefore the number of states in the resulting
+superposition minimal). """
+function prepare_Shor_superposition(N, a, backend)
+
+    # find the largest order for the given integer and number of qubits
+    x_max, max_order = find_largest_order(N)
+    q = qubits_needed(N)
+    println("period: ", max_order)
+    x = x_max[1]
+    println("x with max order selected: $x")
+    #println("smallest number of states in Fourier register: $((2^q)/max_order)")
+
+    # find the states in the upper register after measurement
+    println("Measuring upper register")
+    a_states = find_upper_register(q, x, N, a, max_order)
+    println("States: ", a_states)
+
+    # convert a_states into initial state for upper register
+    println("Constructing superposition state ($((2^q)/max_order) elements)")
+    psi = initial_state_arbitrary_superposition(a_states, q, backend)
+
+    return psi, q
 end
 
 

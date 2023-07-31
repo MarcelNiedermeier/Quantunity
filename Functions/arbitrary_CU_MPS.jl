@@ -141,6 +141,7 @@ end
 # Gates
 #######
 
+
 """ Function to apply multiply-controlled quantum gates on a single
 site.  """
 function multiply_controlled_single_site!(qc::QC_IT_MPS, U,
@@ -218,7 +219,7 @@ function multiply_controlled_single_site!(qc::QC_IT_MPS, U,
         cu += target_space
 
     # gates with single parameter
-elseif U ∈ ["Rx", "Ry", "Rz", "P", "Rn"]
+    elseif U ∈ ["Rx", "Ry", "Rz", "P", "Rn"]
 
         # get gate matrix
         if U ∈ ["Rx", "Ry", "Rz", "P"]
@@ -331,8 +332,6 @@ elseif U ∈ ["Rx", "Ry", "Rz", "P", "Rn"]
         push!(qc.EntanglementEntropy, entanglement_entropy(qc, α=α, cutoff=cutoff))
     end
 end
-
-
 
 
 """ Function to apply multiply-controlled (general) SWAP gates.  """
@@ -526,11 +525,14 @@ function multiply_controlled_general_SWAP!(qc::QC_IT_MPS,
 end
 
 
+
+
+
+
+
 ###############
 # Old Functions
 ###############
-
-
 
 """ Function to implement a controlled single-site operator """
 function CU_single_site_general!(qc::QC_IT_MPS, U, control_qubits, action_qubits,

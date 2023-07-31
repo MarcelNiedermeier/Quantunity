@@ -17,7 +17,7 @@ of the wave function (as multiple samples are usually desired). Only shows the
 measured states which have a frequency of occurrence bigger than eps (in order
 to keep the output more readable and to suppress low-probability states).
 ED VERSION FOR JULIA ARRAYS!"""
-function sample_measurement(qc::QC, register::Array{Int64, 1}, N_meas=100;
+function sample_measurement!(qc::QC, register::Array{Int64, 1}, N_meas=100;
     eps=0.005, verbose=true, save_measurement=true, plot=true)
 
     # check correct ordering of values in register
@@ -135,13 +135,70 @@ corresponding frequency of occurrence ("empirical probability"). To be used at
 the end of a quantum circuit to evaluate the result; doesn't perform collapse
 of the wave function (as multiple samples are usually desired). Only shows the
 measured states which have a frequency of occurrence bigger than eps (in order
+to keep the output more readable and to suppress low-probability states).
+DENSITY MATRIX VERSION!
+LESS COMPLETE THAN OTHER MEASUREMENT FUNCTIONS """
+function sample_measurement!(qc::QC_DM, register::Array{Int64, 1}, N_meas=100,
+    verbose=true, eps=0.001)
+
+    # get number of qubits and matrices
+    N = qc.NumQubits
+    s = Index(2, "QCircuit")
+    proj00 = sparse(array(op("Proj00", s)))
+
+    # sample N_meas measurements
+    outcomes = []
+    for measurement in 1:N_meas
+
+        # loop through qubits and draw sample for each qubit
+        outcome = []
+        for i in register
+            measurement_operator0 = get_single_site_gate(qc, proj00, [i])
+            p0 = real(LinearAlgebra.tr(measurement_operator0*qc.StateVector*measurement_operator0))
+            p1 = 1 - p0
+            push!(outcome, StatsBase.sample([0, 1], StatsBase.Weights([p0, p1])))
+        end
+        push!(outcomes, outcome)
+    end
+
+    samp = proportionmap(outcomes)
+    for key in sort!(collect(keys(samp)))
+        qc.ClassicalBitsProportion[key] = samp[key]
+        #qc.ClassicalBitsProportion[samp[key]] = key
+    end
+
+    # summarise result of measurements
+    if verbose
+        println("\n")
+        println("Full qubit register: $([i for i in 1:N])")
+        println("Doing $N_meas measurements of the register $register: ")
+        println("Obtain the following states with their corresponding frequencies: ")
+        println("Ignore states which have occured with a frequency of less than $eps: ")
+        for key in sort!(collect(keys(samp)))
+            item = samp[key]
+            if item > eps
+                println("State: ", key, ", p = ", item)
+            end
+        end
+        println("\n")
+    end
+end
+
+
+""" Function to sample the measurements of the quantum circuit qc N_meas times.
+Register specifies the sequence of qubits to be measured; can be an arbitrary
+subregister of the full state. Prints out the different outcomes with their
+corresponding frequency of occurrence ("empirical probability"). To be used at
+the end of a quantum circuit to evaluate the result; doesn't perform collapse
+of the wave function (as multiple samples are usually desired). Only shows the
+measured states which have a frequency of occurrence bigger than eps (in order
 to keep the output more readable and to suppress low-probability states). Can
 choose between two algorithms to draw the sample of the MPS. Unless drawing
 very few samples of a large register of a state with very high bond dimension,
 the SVD-based algorithm should be preferred (especially if large statistics
 are desired).
 MPS VERSION FOR ITENSOR! """
-function sample_measurement(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100;
+function sample_measurement!(qc::QC_IT_MPS, register::Array{Int64, 1}, N_meas=100;
     eps=0.005, verbose=true, algorithm="ITensor", save_measurement=true, plot=true)
 
     if algorithm ∉ ["ITensor", "SVDbased", "DirectSampling"]
@@ -513,6 +570,21 @@ function get_bitstring_coefficient(qc::QC, bitstring::Int64)
         error("Given bitstring is not a possible measurement result for $N qubits.")
     end
     return qc.StateVector[bitstring]
+end
+
+
+""" Function to calculate the probability to measure a given bitstring
+at the end of the quantum circuit. """
+function get_bitstring_probability(qc::QC_DM, bitstring::Int64)
+
+    # get number of qubits
+    N = qc.NumQubits
+
+    # construct projector onto given bitstring
+    projector = zeros(2^N, 2^N)
+    projector[bitstring, bitstring] = 1.
+
+    return real(LinearAlgebra.tr(qc.StateVector*projector))
 end
 
 
