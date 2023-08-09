@@ -280,7 +280,7 @@ function Berry_phase_Hadamard_test(H, params, U_init, N_meas, Nk, dt; cos_qc=tru
         UGate!(qc_cos, U_init, [2])
         adiabatic_loop_1D!(qc_cos, H, params, Nk, dt)
         Hadamard!(qc_cos, [1])
-        sample_measurement(qc_cos, [1], N_meas, plot=false, verbose=false, eps=0.000001)
+        sample_measurement!(qc_cos, [1], N_meas, plot=false, verbose=false, eps=0.000001)
         meas_freqs_cos = collect(values(qc_cos.MeasurementResult))
         #return meas_freqs_cos[1] # returning correct result?
         println("meas_freqs_cos ", meas_freqs_cos)
@@ -294,7 +294,7 @@ function Berry_phase_Hadamard_test(H, params, U_init, N_meas, Nk, dt; cos_qc=tru
         UGate!(qc_sin, U_init, [2])
         adiabatic_loop_1D!(qc_sin, H, params, Nk, dt)
         Hadamard!(qc_sin, [1])
-        sample_measurement(qc_sin, [1], N_meas, plot=false, verbose=false, eps=0.000001)
+        sample_measurement!(qc_sin, [1], N_meas, plot=false, verbose=false, eps=0.000001)
         meas_freqs_sin = collect(values(qc_sin.MeasurementResult))
         #return meas_freqs_sin[1] # returning correct result?
         println("meas_freqs_sin ", meas_freqs_sin)
@@ -384,7 +384,7 @@ function Berry_phase_QPE(H, params, Nk, dt, N_qubits, n_prec, N_meas; backend="M
     invQFT!(qc, 1, N_qubits-1)
 
     # measurement
-    sample_measurement(qc, [i for i in 1:n_prec], N_meas, plot=false, verbose=true, eps=0.000001)
+    sample_measurement!(qc, [i for i in 1:n_prec], N_meas, plot=false, verbose=true, eps=0.000001)
     phases, probs_max = QPE_get_phase(qc, 10)
 
     #draw(qc)
@@ -423,7 +423,7 @@ function QPE_test(H, params, Nk, dt, N_qubits, n_prec, N_meas; backend="MPS_ITen
     invQFT!(qc, 1, N_qubits-1)
 
     # measurement
-    sample_measurement(qc, [i for i in 1:n_prec], N_meas, plot=true, verbose=true, eps=0.000001)
+    sample_measurement!(qc, [i for i in 1:n_prec], N_meas, plot=true, verbose=true, eps=0.000001)
     phases, probs_max = QPE_get_phase(qc, 3)
 
     #draw(qc)
@@ -505,7 +505,7 @@ function U_expectation_value!(qc, N_meas; Re=true)
         #S_dagGate!(qc, [1])
         #Hadamard!(qc, [1])
     end
-    sample_measurement(qc, [1], N_meas, plot=false, verbose=false)
+    sample_measurement!(qc, [1], N_meas, plot=false, verbose=false)
 
     # evaluate expectation value
     meas_freqs = collect(values(qc.MeasurementResult))
@@ -801,7 +801,7 @@ function Berry_flux_adiabatic_loop_HT(H, params, U, kx, ky, N_link, δk, dt, N_m
 
     # wrap up and measure
     Hadamard!(qc_plaq, [1])
-    sample_measurement(qc_plaq, [1], N_meas, plot=false, verbose=true, eps=0.000001)
+    sample_measurement!(qc_plaq, [1], N_meas, plot=false, verbose=true, eps=0.000001)
 
     # evaluate Berry flux
     meas_freqs_sin = collect(values(qc_plaq.MeasurementResult))
@@ -852,7 +852,7 @@ function Berry_flux_adiabatic_loop_QPE(H, params, U, kx, ky, dt, N_link, δk, N_
     invQFT!(qc_plaq, 1, N_qubits-1)
 
     # measurement
-    sample_measurement(qc_plaq, [i for i in 1:n_prec], N_meas, plot=false, verbose=false, eps=0.000001)
+    sample_measurement!(qc_plaq, [i for i in 1:n_prec], N_meas, plot=false, verbose=false, eps=0.000001)
     phases, probs_max = QPE_get_phase(qc_plaq, 10)
 
     # return Berry phase correctly
@@ -948,7 +948,7 @@ function get_expectation_value(qc, op, N_meas)
     elseif op == "Y"
         RxGate!(qc, [1], π/2)
     end
-    sample_measurement(qc, [1], N_meas, plot=false, verbose=false)
+    sample_measurement!(qc, [1], N_meas, plot=false, verbose=false)
 
     # evaluate expectation value
     meas_freqs = collect(values(qc.MeasurementResult))

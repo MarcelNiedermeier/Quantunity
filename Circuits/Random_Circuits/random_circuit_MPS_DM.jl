@@ -5,29 +5,26 @@
 
 
 #include("/scratch/work/niederm1/apps/QuantumSimulator/QSim.jl")
-include("../../Functions/density_matrix_simulator.jl")
-include("../../QSim.jl")
-
-#using DelimitedFiles
-
-
+#include("../../Functions/density_matrix_simulator.jl")
+#include("../../QuantumSimulator_DEV/QSim.jl")
+include("/u/67/niederm1/unix/Desktop/QuantumSimulator_DEV/QSim.jl")
+# /u/67/niederm1/unix/Desktop/QuantumSimulator_DEV
 
 function random_circuit(ind)
-
 
     # hard parameters
     bitstring = 200
     #N_sample = 100
-    p1 = 0
-    γ = 0
+    p1 = 0.
+    γ = 0.
 
     # get parameter space
-    N_qubits = [14]#, 12, 14, 16, 18, 20]
+    N_qubits = [8]#, 12, 14, 16, 18, 20]
     Ds = [24]#, 20, 40, 80]
-    bond_dims = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130]
+    bond_dims = [10, 20]#, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130]
     #bond_dims = [10]
-    p_depols = [10 .^range(-4, stop=0, length=13)]
-    N_samples = [i for i in 1:150]
+    p_depols = [10 .^range(-4, stop=0, length=2)]
+    N_samples = [i for i in 1:3]
     parameter_space = collect(Iterators.product(N_qubits, Ds, bond_dims, p_depols, N_samples))
 
     ps = parameter_space[ind]
@@ -42,11 +39,13 @@ function random_circuit(ind)
 
     #for sample in 1:N_sample
 
-    #println("Doing sample $sample")
+    println("p_depol $p_depol")
 
     # simulate random circuit
     qc_MPS = initialise_qcircuit(N_qubit, "MPS_ITensor", maxdim=bond_dim)
-    qc_DM = initialise_dmcircuit(N_qubit)
+    qc_DM = initialise_qcircuit(N_qubit, "DM_Julia")
+    set_gate_errors!(qc_DM; p_amp_damp=γ, p_depol1=p1, p_depol2=p_depol)
+
     randomCircuit!(qc_MPS, 1, N_qubit, D)
     randomCircuit!(qc_DM, 1, N_qubit, D, p1, γ, p_depol)
 
@@ -81,6 +80,8 @@ function random_circuit(ind)
 
     return (bitstring, p1, γ, N_qubit, D, bond_dim, p_depol, N_sample, bitstring_prob_MPS, bitstring_prob_DM)
 end
+
+random_circuit(2)
 
 
 #@time random_circuit(1)
